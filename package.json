@@ -1,0 +1,48 @@
+{
+  "name": "@dittolive/cli",
+  "version": "0.1.0",
+  "description": "The Ditto CLI — run DQL against a local Ditto store, load sample datasets, and install DQL skills for AI agents",
+  "license": "SEE LICENSE IN LICENSE.md",
+  "type": "module",
+  "bin": {
+    "ditto": "dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "os": [
+    "darwin",
+    "linux",
+    "win32"
+  ],
+  "cpu": [
+    "arm64",
+    "x64"
+  ],
+  "scripts": {
+    "dev": "tsx --env-file=.env src/cli/index.ts",
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:unit": "vitest run --project unit",
+    "test:int": "vitest run --project integration",
+    "test:e2e": "vitest run --project e2e",
+    "spike:a": "node --env-file=.env scripts/spike-a.mjs"
+  },
+  "dependencies": {
+    "@dittolive/ditto": "^5.1.0",
+    "chalk": "^5.6.2",
+    "commander": "^14.0.2",
+    "env-paths": "^3.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.4.0",
+    "execa": "^10.0.1",
+    "tsx": "^4.23.12",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.11"
+  }
+}

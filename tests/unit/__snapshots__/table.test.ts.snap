@@ -1,0 +1,12 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`renderTable > snapshot: typical document rows 1`] = `
+"┌─────┬───────┬──────────────┬──────┐
+│ _id │ rated │ title        │ year │
+├─────┼───────┼──────────────┼──────┤
+│ 1   │ R     │ Alien        │ 1979 │
+│ 2   │ R     │ Blade Runner │ 1982 │
+│ 3   │ G     │ Toy Story    │ 1995 │
+└─────┴───────┴──────────────┴──────┘
+3 rows"
+`;
