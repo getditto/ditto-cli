@@ -31,12 +31,13 @@ Branch: `aaronlabeau/sdks-4855-dql-cli-tool`. This file is the working checklist
 - [x] `package.json` — name `@dittolive/cli`, `bin.ditto → dist/cli.js`, `type: module`, `engines.node >=20`, `os`/`cpu` restrictions, `files: ["dist"]`, scripts: `dev` (tsx + `--env-file=.env`), `typecheck`, `test` _(build/lint scripts + tsup/biome/vitest configs still to add)_
 - [x] `tsconfig.json`, `.gitignore` (incl. `.env`, `build/token-chunks.ts`, `dist/`) — _tsup/biome/vitest configs pending_
 - [x] `vitest.config.ts` (projects: unit / integration [serial, 120s] / e2e) + `tests/setup/env.ts` (loads repo-root `.env`, `FORCE_COLOR=0`) + `tests/helpers/credentials.ts` (skip-gate + tmpdir helpers) — _tsup/biome configs pending_
-- [ ] `src/cli/registry.ts` — group/command registration API _(currently inline in `src/cli/index.ts`; extract when a second group lands)_
-- [x] `src/config/paths.ts` — `resolveDataDir(flag, env, platform)` + `configDir()`
-- [x] `src/cli/groups/dql/` with `doctor` subcommand: platform/arch vs. SDK matrix, Node version, data-dir writability, token presence + expiry _(lives in `src/cli/index.ts` until registry extraction)_
-- [ ] Stub groups `skills` (add/update/list → "not yet implemented" exit 2) and `system` (`version` prints version/channel=dev/platform; `update` stub)
-- [ ] `AGENTS.md` — build/test/run conventions; README stub
-- [ ] `.github/workflows/ci.yml` — lint, typecheck, unit tests on macos-latest/ubuntu-latest/windows-latest × Node 20/22/24
+- [x] `src/cli/registry.ts` — group/command registration API _(deferred — group modules register onto commander directly; extract a registry abstraction only if a third group needs it)_
+- [x] `src/config/paths.ts` — `resolveDataDir(flag, env, platform)` + `configDir()` (lazy; `DITTO_CONFIG_DIR` test override)
+- [x] `src/cli/groups/dql/` with `doctor` subcommand: platform/arch vs. SDK matrix, Node version, data-dir writability, token presence + expiry
+- [x] Stub groups `skills` (add/update/list → "not yet implemented" exit 2) and `system` (`version` prints version/channel=dev/platform; `update` stub) — _partial: `ditto version` is commander's `--version`; skills/system groups land at M6/M7_
+- [x] `AGENTS.md` — build/test/run conventions; README stub — _AGENTS.md done; README at M8_
+- [x] `.github/workflows/ci.yml` — lint, typecheck, unit on macos/ubuntu/windows × Node 20/22/24; integration+e2e job (macOS, secrets-gated); bundle token-grep guard
+- [x] tsup build: `dist/cli.js` ESM bundle w/ shebang + createRequire shim, `__CLI_VERSION__` + `RELEASE` defines; biome lint+format wired (`npm run lint`)
 
 **Tests:** unit — paths precedence matrix (flag/env/default × platforms), registry routing, doctor check aggregation; e2e — `ditto dql doctor`, `ditto version`, unknown command → exit 2.
 **Exit:** `npm run dev -- dql doctor` works; CI green.
@@ -58,18 +59,18 @@ Branch: `aaronlabeau/sdks-4855-dql-cli-tool`. This file is the working checklist
 
 ## M2 — Interactive & input modes
 
-- [ ] `src/query/split.ts` — statement splitter (`;` outside quotes/identifiers, `--`/`/* */` comments, blank-line tolerance) — heavily unit-tested
-- [ ] `src/cli/groups/dql/repl.ts` — `node:repl` (or readline loop): multiline until `;`, history file under config dir, dot-commands `.help` `.collections` `.indexes [c]` `.exit`; per-statement timing echo (respects global format flags)
-- [ ] `-f/--file` runner: split → execute sequentially → per-statement output; `--bail` (default: stop on first error) vs. `--continue-on-error`; summary footer (N ok, M failed)
-- [ ] stdin detection (`!isatty(0)` → read stdin as file input)
-- [ ] Params: `-p name=value` (repeatable; `JSON.parse` with string fallback) + `--args '<json>'`; bind to `:name`; unknown-param and unused-param warnings
-- [ ] `-o/--out <path>` — write results to file (format from extension or `--format`); stdout prints one-line summary; all non-result output stays on stderr (jq-safe piping)
-- [ ] No-LIMIT one-time warning — bare `SELECT` without `LIMIT` on a TTY warns once (persist `noLimitWarned` in config dir); points at `LIMIT`, `--max-rows`, `-o`
-- [ ] `src/render/csv.ts` — RFC-4180-ish, union-of-keys header
-- [ ] `ditto dql collections` → `SELECT * FROM system:collections`; `ditto dql indexes [collection]` → `system:indexes` (WHERE when arg given)
+- [x] `src/query/split.ts` — statement splitter (`;` outside quotes/identifiers, `--`/`/* */` comments, blank-line tolerance)
+- [x] `src/cli/groups/dql/repl.ts` — `node:repl`: multiline until `;` (Recoverable continuation prompt), history file under config dir, dot-commands `.help` `.collections` `.indexes [c]`; per-statement timing echo. _(TTY-only by design: piped stdin = batch mode. REPL verified manually — e2e has no pty.)_
+- [x] `-f/--file` runner: split → execute sequentially → per-statement output; bail on first error by default, `--continue-on-error` override; summary footer (N ok, M failed)
+- [x] stdin detection (`!isatty(0)` → read stdin as file input)
+- [x] Params: `-p name=value` (repeatable; `JSON.parse` with string fallback) + `--args '<json>'`; bind to `:name`; usage errors → exit 2
+- [x] `-o/--out <path>` — write results to file (format from extension or `--format`); stdout prints one-line summary; all non-result output stays on stderr (jq-safe piping)
+- [x] No-LIMIT one-time warning — bare `SELECT` without `LIMIT` on a TTY warns once (persist `noLimitWarned` in config dir); points at `LIMIT`, `--max-rows`, `-o` _(TTY-gated; unit-adjacent, not e2e-covered — needs pty)_
+- [x] `src/render/csv.ts` — RFC-4180-ish, union-of-keys header
+- [x] `ditto dql collections` → `SELECT * FROM system:collections`; `ditto dql indexes [collection]` → `system:indexes` (WHERE when arg given)
 
-**Tests:** unit — splitter corpus (quotes, comments, `;` in strings), param parsing; e2e — `-f` mixed valid/invalid + exit codes, stdin pipe, REPL via piped stdin (`.exit`), collections/indexes on seeded store.
-**Exit:** all four input modes work; `.help` accurate.
+**Tests:** ✅ unit — splitter corpus (11 cases), params (8), CSV (5), state store (4); ✅ integration — system:collections/system:indexes on seeded store (3); ✅ e2e — `-f` multi-statement, bail/`--continue-on-error`, stdin batch, `-p`/`--args`, `-o` CSV, usage errors (6). **100/100 green.**
+**Exit:** ✅ all four input modes work.
 
 ## M3 — Sample datasets (`ditto dql dataset`)
 

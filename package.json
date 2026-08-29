@@ -26,10 +26,13 @@
     "dev": "tsx --env-file=.env src/cli/index.ts",
     "build": "tsup",
     "typecheck": "tsc --noEmit",
+    "lint": "biome check src tests scripts",
+    "lint:fix": "biome check --write src tests scripts",
     "test": "vitest run",
     "test:unit": "vitest run --project unit",
     "test:int": "vitest run --project integration",
     "test:e2e": "vitest run --project e2e",
+    "coverage": "vitest run --coverage --project unit --project integration",
     "spike:a": "node --env-file=.env scripts/spike-a.mjs"
   },
   "dependencies": {
@@ -39,8 +42,11 @@
     "env-paths": "^3.0.0"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.5.11",
     "@types/node": "^26.4.0",
+    "@vitest/coverage-v8": "^4.1.11",
     "execa": "^10.0.1",
+    "tsup": "^8.5.1",
     "tsx": "^4.23.12",
     "typescript": "^7.0.2",
     "vitest": "^4.1.11"

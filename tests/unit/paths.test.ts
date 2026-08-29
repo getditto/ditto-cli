@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
 import os from "node:os";
 import path from "node:path";
+import { describe, expect, it } from "vitest";
 import { defaultDataDir, resolveDataDir } from "../../src/config/paths.js";
 
 describe("resolveDataDir precedence", () => {

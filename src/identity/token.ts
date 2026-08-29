@@ -17,8 +17,7 @@
 // Overridden to `true` by the release build (tsup define). Do not reference
 // import.meta.env or process.env trickery here — this constant is the guard.
 declare const RELEASE: string | undefined;
-const isRelease =
-  typeof RELEASE !== "undefined" ? RELEASE === "true" : false;
+const isRelease = typeof RELEASE !== "undefined" ? RELEASE === "true" : false;
 
 export interface Identity {
   appId: string;

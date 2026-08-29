@@ -57,13 +57,17 @@ describe.skipIf(!hasDevCredentials)(`integration: DittoSession (${NO_CREDENTIALS
   });
 
   it("EXPLAIN returns a plan structure as the first item", async () => {
-    const rows = extractRows(await session.execute("EXPLAIN SELECT * FROM movies WHERE year = 1979"));
+    const rows = extractRows(
+      await session.execute("EXPLAIN SELECT * FROM movies WHERE year = 1979"),
+    );
     expect(rows.length).toBeGreaterThan(0);
     expect(rows[0]).toHaveProperty("plan");
   });
 
   it("PROFILE appends a trailing ~request_profile envelope", async () => {
-    const rows = extractRows(await session.execute("PROFILE SELECT * FROM movies WHERE year = 1979"));
+    const rows = extractRows(
+      await session.execute("PROFILE SELECT * FROM movies WHERE year = 1979"),
+    );
     const envelope = rows.findLast((r) => "~request_profile" in r);
     expect(envelope).toBeDefined();
     const profile = envelope?.["~request_profile"] as Record<string, unknown>;

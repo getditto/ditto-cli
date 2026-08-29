@@ -1,17 +1,21 @@
-import path from "node:path";
 import os from "node:os";
+import path from "node:path";
 import envPaths from "env-paths";
 
-const paths = envPaths("ditto", { suffix: "" });
+// Resolved lazily (not at module load) so tests can redirect via env vars.
+// NOTE: env-paths captures os.homedir() at module load — never cache its result
+// at module scope if you want env overrides to work, and prefer the explicit
+// DITTO_*_DIR overrides in tests.
+const paths = () => envPaths("ditto", { suffix: "" });
 
 /** OS-default data directory (macOS ~/Library/Application Support/ditto, Linux ~/.local/share/ditto, Windows %LOCALAPPDATA%\ditto). */
 export function defaultDataDir(): string {
-  return paths.data;
+  return paths().data;
 }
 
-/** OS-default config directory (update-check cache, one-time-warning flags). */
+/** Config directory (update-check cache, one-time-warning flags). `DITTO_CONFIG_DIR` overrides — used by tests, handy for portable setups. */
 export function configDir(): string {
-  return paths.config;
+  return process.env.DITTO_CONFIG_DIR ?? paths().config;
 }
 
 /**

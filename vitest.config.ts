@@ -2,6 +2,16 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
+    coverage: {
+      provider: "v8",
+      all: true,
+      include: ["src/**"],
+      // The process entry point is exercised by e2e subprocess tests, which
+      // v8 coverage cannot see — excluded deliberately.
+      exclude: ["src/cli/index.ts"],
+      // Hard gate (PM decision): coverage must stay at or above 85%.
+      thresholds: { statements: 85, branches: 85, functions: 85, lines: 85 },
+    },
     projects: [
       {
         test: {

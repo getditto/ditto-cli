@@ -1,6 +1,13 @@
 import type * as sdk from "@dittolive/ditto";
 
-export type StatementKind = "select" | "explain" | "profile" | "advise" | "mutation" | "ddl" | "other";
+export type StatementKind =
+  | "select"
+  | "explain"
+  | "profile"
+  | "advise"
+  | "mutation"
+  | "ddl"
+  | "other";
 
 const FIRST_WORD = /^\s*(?:--[^\n]*\n|\/\*[\s\S]*?\*\/|\s)*([a-zA-Z]+)/;
 

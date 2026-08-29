@@ -1,7 +1,8 @@
 import chalk from "chalk";
 
 /** String length ignoring ANSI escape codes (good enough for our own output). */
-const ANSI = /\[[0-9;]*m/g;
+// biome-ignore lint/suspicious/noControlCharactersInRegex: intentional ANSI escape-code matching
+const ANSI = /\x1b\[[0-9;]*m/g;
 function visibleLength(s: string): number {
   return s.replace(ANSI, "").length;
 }
@@ -50,7 +51,9 @@ export function renderTable(rows: Record<string, unknown>[]): string {
   const line = (left: string, mid: string, right: string) =>
     left + widths.map((w) => "─".repeat(w + 2)).join(mid) + right;
   const row = (cells: string[]) =>
-    "│ " + cells.map((c, i) => c + " ".repeat((widths[i] ?? 0) - visibleLength(c))).join(" │ ") + " │";
+    "│ " +
+    cells.map((c, i) => c + " ".repeat((widths[i] ?? 0) - visibleLength(c))).join(" │ ") +
+    " │";
 
   const out: string[] = [];
   out.push(line("┌", "┬", "┐"));

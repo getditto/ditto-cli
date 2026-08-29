@@ -1,9 +1,10 @@
 // Spike A: verify Ditto Node SDK v5.1 init + offline license + DQL execution.
 // Run: node --env-file=.env scripts/spike-a.mjs
-import * as sdk from "@dittolive/ditto";
+
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import * as sdk from "@dittolive/ditto";
 
 const appId = process.env.DATABASE_ID;
 const token = process.env.OFFLINE_TOKEN;
@@ -14,7 +15,12 @@ if (!appId || !token) {
 
 const storeDir = fs.mkdtempSync(path.join(os.tmpdir(), "ditto-spike-a-"));
 console.log("store dir:", storeDir);
-console.log("sdk keys:", Object.keys(sdk).filter((k) => /Ditto|Config|init/i.test(k)).join(", "));
+console.log(
+  "sdk keys:",
+  Object.keys(sdk)
+    .filter((k) => /Ditto|Config|init/i.test(k))
+    .join(", "),
+);
 
 try {
   if (typeof sdk.init === "function") await sdk.init();
@@ -31,11 +37,14 @@ try {
   // NOTE: deliberately NOT calling startSync() — offline-only.
 
   const insert = await ditto.store.execute(
-    "INSERT INTO COLLECTION movies (director MAP, ratings MAP, watch_count COUNTER) DOCUMENTS ({ '_id': 'tt0111161', 'title': 'The Shawshank Redemption', 'year': 1994, 'genres': ['Drama'], 'director': {'name': 'Frank Darabont', 'born': 1959}, 'ratings': {'imdb': 9.3, 'rotten_tomatoes': 91, 'metacritic': 80}, 'watch_count': 0, 'is_classic': true, 'released': '1994-09-23' }), ({ '_id': 'tt1375666', 'title': 'Inception', 'year': 2010, 'genres': ['Action','Sci-Fi'], 'director': {'name': 'Christopher Nolan', 'born': 1970}, 'ratings': {'imdb': 8.8}, 'watch_count': 0, 'is_classic': false }) ON ID CONFLICT DO UPDATE"
+    "INSERT INTO COLLECTION movies (director MAP, ratings MAP, watch_count COUNTER) DOCUMENTS ({ '_id': 'tt0111161', 'title': 'The Shawshank Redemption', 'year': 1994, 'genres': ['Drama'], 'director': {'name': 'Frank Darabont', 'born': 1959}, 'ratings': {'imdb': 9.3, 'rotten_tomatoes': 91, 'metacritic': 80}, 'watch_count': 0, 'is_classic': true, 'released': '1994-09-23' }), ({ '_id': 'tt1375666', 'title': 'Inception', 'year': 2010, 'genres': ['Action','Sci-Fi'], 'director': {'name': 'Christopher Nolan', 'born': 1970}, 'ratings': {'imdb': 8.8}, 'watch_count': 0, 'is_classic': false }) ON ID CONFLICT DO UPDATE",
   );
   console.log("insert ok, mutated:", insert.mutatedDocumentIDs?.length ?? "n/a");
 
-  const result = await ditto.store.execute("SELECT * FROM movies WHERE year >= :minYear ORDER BY year", { minYear: 1990 });
+  const result = await ditto.store.execute(
+    "SELECT * FROM movies WHERE year >= :minYear ORDER BY year",
+    { minYear: 1990 },
+  );
   const items = result.items ?? result.documents ?? [];
   const rows = items.map((it) => (typeof it.value === "function" ? it.value() : it.value));
   console.log("select rows:", rows.length);
@@ -44,8 +53,13 @@ try {
   // EXPLAIN check
   try {
     const explain = await ditto.store.execute("EXPLAIN SELECT * FROM movies WHERE year = 1994");
-    const exItems = (explain.items ?? []).map((it) => (typeof it.value === "function" ? it.value() : it.value));
-    console.log("explain first item keys:", exItems[0] ? Object.keys(exItems[0]).join(",") : "none");
+    const exItems = (explain.items ?? []).map((it) =>
+      typeof it.value === "function" ? it.value() : it.value,
+    );
+    console.log(
+      "explain first item keys:",
+      exItems[0] ? Object.keys(exItems[0]).join(",") : "none",
+    );
   } catch (e) {
     console.log("EXPLAIN failed:", e.message);
   }
@@ -53,7 +67,9 @@ try {
   // PROFILE check
   try {
     const prof = await ditto.store.execute("PROFILE SELECT * FROM movies WHERE year = 1994");
-    const pItems = (prof.items ?? []).map((it) => (typeof it.value === "function" ? it.value() : it.value));
+    const pItems = (prof.items ?? []).map((it) =>
+      typeof it.value === "function" ? it.value() : it.value,
+    );
     const last = pItems[pItems.length - 1];
     console.log("profile trailing item keys:", last ? Object.keys(last).join(",") : "none");
   } catch (e) {

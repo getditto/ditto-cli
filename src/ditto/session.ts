@@ -13,6 +13,11 @@ export class LockError extends Error {
   }
 }
 
+/** Minimal structural interface so runners can be unit-tested without the native SDK. */
+export interface QueryExecutor {
+  execute(statement: string, args?: sdk.DQLQueryArguments): Promise<sdk.QueryResult>;
+}
+
 let initialized = false;
 
 export class DittoSession {
@@ -41,7 +46,10 @@ export class DittoSession {
     } catch (err) {
       const code = (err as { code?: string }).code ?? "";
       const message = (err as Error).message ?? "";
-      if (code.includes("persistence-directory-locked") || message.includes("File already locked")) {
+      if (
+        code.includes("persistence-directory-locked") ||
+        message.includes("File already locked")
+      ) {
         throw new LockError(dataDir);
       }
       throw err;

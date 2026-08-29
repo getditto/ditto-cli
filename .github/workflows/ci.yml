@@ -1,0 +1,60 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit:
+    name: unit + lint + typecheck (${{ matrix.os }}, node ${{ matrix.node }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest, windows-latest]
+        node: ["20", "22", "24"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run test:unit
+      - run: npm run build
+      - name: bundle contains no raw token (guard for M8 token stamping)
+        run: |
+          if [ -n "${{ secrets.DQL_OFFLINE_LICENSE }}" ] && grep -qF "${{ secrets.DQL_OFFLINE_LICENSE }}" dist/cli.js; then
+            echo "::error::raw offline token found in bundle"
+            exit 1
+          fi
+          echo "no raw token in bundle (or secret unset)"
+        shell: bash
+
+  integration:
+    name: integration + e2e (macos, node 24)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+      - name: integration tests + coverage gate (85% hard floor)
+        env:
+          DATABASE_ID: ${{ secrets.DITTO_DATABASE_ID }}
+          OFFLINE_TOKEN: ${{ secrets.DQL_OFFLINE_LICENSE }}
+        run: npm run coverage
+      - name: e2e tests (skip without credentials)
+        env:
+          DATABASE_ID: ${{ secrets.DITTO_DATABASE_ID }}
+          OFFLINE_TOKEN: ${{ secrets.DQL_OFFLINE_LICENSE }}
+        run: npm run test:e2e
