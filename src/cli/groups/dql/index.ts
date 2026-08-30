@@ -7,6 +7,7 @@ import { DittoSession, LockError } from "../../../ditto/session.js";
 import { ParamError, parseParams } from "../../../query/params.js";
 import { splitStatements } from "../../../query/split.js";
 import { runBatch } from "./batch.js";
+import { registerDatasetCommands } from "./dataset.js";
 import { collectDoctorChecks } from "./doctor.js";
 import { startRepl } from "./repl.js";
 import { runStatement } from "./run.js";
@@ -14,7 +15,7 @@ import { runStatement } from "./run.js";
 interface ExecOpts {
   dataDir?: string;
   format?: string;
-  maxRows: string;
+  maxRows?: string;
   out?: string;
   file?: string;
   param?: string[];
@@ -38,8 +39,8 @@ async function openSession(opts: ExecOpts): Promise<DittoSession | null> {
 function execRunOpts(opts: ExecOpts) {
   return {
     format: opts.format,
-    maxRows: Number.parseInt(opts.maxRows, 10),
-    maxRowsExplicit: opts.maxRows !== "10000",
+    maxRows: Number.parseInt(opts.maxRows ?? "10000", 10),
+    maxRowsExplicit: (opts.maxRows ?? "10000") !== "10000",
     out: opts.out,
     params: parseParams(opts.param, opts.args),
   };
@@ -62,6 +63,8 @@ async function batchFromText(session: DittoSession, source: string, text: string
 
 export function registerDqlGroup(dql: ReturnType<Command["command"]>): void {
   dql.description("Run DQL statements against a local Ditto store");
+
+  registerDatasetCommands(dql, { openSession });
 
   dql
     .command("doctor")
@@ -118,8 +121,12 @@ export function registerDqlGroup(dql: ReturnType<Command["command"]>): void {
       }
     });
 
-  // Default action: one-shot / -f file / piped stdin / REPL
+  // Execution subcommand (also the default — see rewriteDefaultSubcommand in
+  // the CLI entry, which maps `ditto dql <stmt>` → `ditto dql exec <stmt>`;
+  // an action directly on `dql` would swallow same-named child options).
   dql
+    .command("exec")
+    .description("Run a DQL statement, file, or piped input (default command)")
     .argument("[statement]", "DQL statement to run")
     .option("-f, --file <path>", "run statements from a file")
     .option("-p, --param <name=value...>", "bind :name parameters (values JSON-parsed, string fallback)")

@@ -1,0 +1,268 @@
+{
+    "count": {
+        "query": "SELECT count(*) FROM movies",
+        "category": "SELECT"
+    },
+    "select_all": {
+        "query": "SELECT * FROM movies",
+        "category": "SELECT"
+    },
+    "select_small": {
+        "query": "SELECT * FROM movies LIMIT 10",
+        "category": "SELECT"
+    },
+    "select_100": {
+        "query": "SELECT * FROM movies LIMIT 100",
+        "category": "SELECT"
+    },
+    "select_1000": {
+        "query": "SELECT * FROM movies LIMIT 1000",
+        "category": "SELECT"
+    },
+    "select_10000": {
+        "query": "SELECT * FROM movies LIMIT 10000",
+        "category": "SELECT"
+    },
+    "insert": {
+        "query": "INSERT INTO movies DOCUMENTS(deserialize_json('{\"plot\":\"cb045f61-c0bb-4ba8-ad12-8ae8a4ba061d\",\"genres\":[\"Drama\",\"Fantasy\",\"Adventure\"],\"runtime\":114,\"rated\":\"PG-13\",\"cast\":[\"Alex Johnson\",\"Maria Lopez\",\"Samuel Kim\",\"Nina Patel\"],\"num_mflix_comments\":0,\"fullplot\":\"A struggling writer discovers a hidden city beneath the streets, where imagination becomes reality. As he explores the boundaries between fiction and truth, he learns that every story he writes alters lives in the real world, forcing him to confront the consequences of his creativity.\",\"languages\":[\"English\"],\"released\":\"2025-07-18T00:00:00.000Z\",\"directors\":[\"Jordan Smith\"],\"writers\":[\"Taylor Morgan (screenplay)\",\"Casey Lee (story)\"],\"awards\":{\"wins\":0,\"nominations\":0,\"text\":\"No awards yet.\"},\"lastupdated\":\"2025-10-03 12:00:00.000000000\",\"imdb\":{\"rating\":0.0,\"votes\":0,\"id\":999999},\"countries\":[\"USA\"],\"tomatoes\":{\"viewer\":{\"rating\":0,\"numReviews\":0},\"lastUpdated\":\"2025-10-03T12:00:00.000Z\"}}'))",
+        "postQueries": [
+            "EVICT FROM movies WHERE plot = 'cb045f61-c0bb-4ba8-ad12-8ae8a4ba061d'"
+        ],
+        "category": "INSERT"
+    },
+    "update_single": {
+        "preQueries": [
+            "INSERT INTO movies DOCUMENTS(deserialize_json('{\"plot\":\"update-test-benchmark-uuid\",\"runtime\":999,\"rated\":\"TEST\"}'))"
+        ],
+        "query": "UPDATE movies SET runtime = 888 WHERE plot = 'update-test-benchmark-uuid'",
+        "postQueries": [
+            "EVICT FROM movies WHERE plot = 'update-test-benchmark-uuid'"
+        ],
+        "category": "UPDATE"
+    },
+    "evict_single": {
+        "preQueries": [
+            "INSERT INTO movies DOCUMENTS(deserialize_json('{\"plot\":\"delete-test-benchmark-uuid\",\"rated\":\"TEST\"}'))"
+        ],
+        "query": "EVICT FROM movies WHERE plot = 'delete-test-benchmark-uuid'",
+        "category": "EVICT"
+    },
+    "delete_single": {
+        "preQueries": [
+            "INSERT INTO movies DOCUMENTS(deserialize_json('{\"plot\":\"delete-stmt-test-benchmark-uuid\",\"rated\":\"TEST\"}'))"
+        ],
+        "query": "DELETE FROM movies WHERE plot = 'delete-stmt-test-benchmark-uuid'",
+        "category": "DELETE"
+    },
+    "filtered_query_no_index": {
+        "preQueries": [
+            "DROP INDEX IF EXISTS movies_rated ON movies"
+        ],
+        "query": "SELECT * FROM movies WHERE rated = 'PG'",
+        "category": "SELECT"
+    },
+    "filtered_query_with_index": {
+        "preQueries": [
+            "DROP INDEX IF EXISTS movies_rated ON movies",
+            "CREATE INDEX movies_rated ON movies (rated)"
+        ],
+        "query": "SELECT * FROM movies WHERE rated = 'PG'",
+        "postQueries": [
+            "DROP INDEX IF EXISTS movies_rated ON movies"
+        ],
+        "category": "INDEX_SELECT"
+    },
+    "range_query_year": {
+        "query": "SELECT * FROM movies WHERE _id.year > '2000' AND _id.year < '2010'",
+        "category": "SELECT"
+    },
+    "range_query_runtime": {
+        "query": "SELECT * FROM movies WHERE runtime > 120 AND runtime < 180",
+        "category": "SELECT"
+    },
+    "range_query_year_indexed": {
+        "preQueries": [
+            "DROP INDEX IF EXISTS movies_year_range ON movies",
+            "CREATE INDEX movies_year_range ON movies (_id.year)"
+        ],
+        "query": "SELECT * FROM movies WHERE _id.year > '2000' AND _id.year < '2010'",
+        "postQueries": [
+            "DROP INDEX IF EXISTS movies_year_range ON movies"
+        ],
+        "category": "INDEX_SELECT"
+    },
+    "multi_field_filter": {
+        "query": "SELECT * FROM movies WHERE rated = 'PG' AND runtime > 120",
+        "category": "SELECT"
+    },
+    "multi_field_filter_indexed": {
+        "preQueries": [
+            "DROP INDEX IF EXISTS movies_rated_runtime ON movies",
+            "CREATE INDEX movies_rated_runtime ON movies (rated, runtime)"
+        ],
+        "query": "SELECT * FROM movies WHERE rated = 'PG' AND runtime > 120",
+        "postQueries": [
+            "DROP INDEX IF EXISTS movies_rated_runtime ON movies"
+        ],
+        "category": "INDEX_SELECT"
+    },
+    "text_search_plot": {
+        "query": "SELECT * FROM movies WHERE CONTAINS(plot, 'love')",
+        "category": "SELECT"
+    },
+    "text_search_plot_indexed": {
+        "preQueries": [
+            "DROP INDEX IF EXISTS movies_plot_text ON movies",
+            "CREATE INDEX movies_plot_text ON movies (plot)"
+        ],
+        "query": "SELECT * FROM movies WHERE CONTAINS(plot, 'love')",
+        "postQueries": [
+            "DROP INDEX IF EXISTS movies_plot_text ON movies"
+        ],
+        "category": "INDEX_SELECT"
+    },
+    "text_search_title": {
+        "query": "SELECT * FROM movies WHERE CONTAINS(_id.title, 'Star')",
+        "category": "SELECT"
+    },
+    "nested_field_awards": {
+        "query": "SELECT * FROM movies WHERE is_number(awards.wins) AND awards.wins > 5",
+        "category": "SELECT"
+    },
+    "nested_field_awards_indexed": {
+        "preQueries": [
+            "DROP INDEX IF EXISTS movies_awards_wins ON movies",
+            "CREATE INDEX movies_awards_wins ON movies (awards.wins)"
+        ],
+        "query": "SELECT * FROM movies WHERE is_number(awards.wins) AND awards.wins > 5",
+        "postQueries": [
+            "DROP INDEX IF EXISTS movies_awards_wins ON movies"
+        ],
+        "category": "INDEX_SELECT"
+    },
+    "nested_field_imdb": {
+        "query": "SELECT * FROM movies WHERE is_number(imdb.rating) AND imdb.rating > 8.0",
+        "category": "SELECT"
+    },
+    "sort_by_year": {
+        "query": "SELECT * FROM movies ORDER BY _id.year DESC LIMIT 100",
+        "category": "SELECT"
+    },
+    "sort_by_runtime": {
+        "query": "SELECT * FROM movies ORDER BY runtime ASC LIMIT 100",
+        "category": "SELECT"
+    },
+    "sort_by_year_indexed": {
+        "preQueries": [
+            "DROP INDEX IF EXISTS movies_year_sort ON movies",
+            "CREATE INDEX movies_year_sort ON movies (_id.year)"
+        ],
+        "query": "SELECT * FROM movies ORDER BY _id.year LIMIT 100",
+        "postQueries": [
+            "DROP INDEX IF EXISTS movies_year_sort ON movies"
+        ],
+        "category": "INDEX_SELECT"
+    },
+    "aggregation_count_by_rated": {
+        "query": "SELECT rated, COUNT(*) FROM movies GROUP BY rated",
+        "category": "SELECT"
+    },
+    "aggregation_avg_runtime": {
+        "query": "SELECT AVG(runtime) FROM movies WHERE runtime IS NOT NULL AND runtime IS NOT MISSING",
+        "category": "SELECT"
+    },
+    "aggregation_count_by_year": {
+        "query": "SELECT _id.year, COUNT(*) FROM movies GROUP BY _id.year ORDER BY _id.year DESC LIMIT 10",
+        "category": "SELECT"
+    },
+    "year_filter_no_index": {
+        "preQueries": [
+            "DROP INDEX IF EXISTS movies_year ON movies"
+        ],
+        "query": "SELECT * FROM movies WHERE _id.year > '2000'",
+        "category": "SELECT"
+    },
+    "year_filter_with_index": {
+        "preQueries": [
+            "DROP INDEX IF EXISTS movies_year ON movies",
+            "CREATE INDEX movies_year ON movies (_id.year)"
+        ],
+        "query": "SELECT * FROM movies WHERE _id.year > '2000'",
+        "postQueries": [
+            "DROP INDEX IF EXISTS movies_year ON movies"
+        ],
+        "category": "INDEX_SELECT"
+    },
+    "exact_match_id": {
+        "query": "SELECT * FROM movies WHERE _id.year = '2001'",
+        "category": "SELECT"
+    },
+    "exact_match_runtime": {
+        "query": "SELECT * FROM movies WHERE runtime = 120",
+        "category": "SELECT"
+    },
+    "null_check": {
+        "query": "SELECT * FROM movies WHERE rated IS NULL",
+        "category": "SELECT"
+    },
+    "not_null_check": {
+        "query": "SELECT * FROM movies WHERE rated IS NOT NULL AND rated IS NOT MISSING",
+        "category": "SELECT"
+    },
+    "in_clause_small": {
+        "query": "SELECT * FROM movies WHERE rated IN ('G', 'PG')",
+        "category": "SELECT"
+    },
+    "in_clause_large": {
+        "query": "SELECT * FROM movies WHERE _id.year IN ('1999', '2000', '2001', '2002', '2003', '2004', '2005')",
+        "category": "SELECT"
+    },
+    "like_pattern": {
+        "query": "SELECT * FROM movies WHERE _id.title LIKE '%Star%'",
+        "category": "SELECT"
+    },
+    "complex_where_clause": {
+        "query": "SELECT * FROM movies WHERE (rated = 'PG' OR rated = 'G') AND runtime > 90 AND _id.year > '1990'",
+        "category": "SELECT"
+    },
+    "array_field_query": {
+        "query": "SELECT * FROM movies WHERE 'Drama' IN genres",
+        "category": "SELECT"
+    },
+    "select_specific_fields": {
+        "query": "SELECT _id.title, runtime, rated FROM movies LIMIT 1000",
+        "category": "SELECT"
+    },
+    "select_nested_fields": {
+        "query": "SELECT _id.title, awards.wins, imdb.rating FROM movies LIMIT 1000",
+        "category": "SELECT"
+    },
+    "count_with_condition": {
+        "query": "SELECT COUNT(*) FROM movies WHERE runtime > 120",
+        "category": "SELECT"
+    },
+    "distinct_values": {
+        "query": "SELECT DISTINCT rated FROM movies",
+        "category": "SELECT"
+    },
+    "empty_result_set": {
+        "query": "SELECT * FROM movies WHERE _id.year = '1800'",
+        "category": "SELECT"
+    },
+    "single_result": {
+        "query": "SELECT * FROM movies WHERE _id.year = '1893'",
+        "category": "SELECT"
+    },
+    "large_text_search": {
+        "query": "SELECT * FROM movies WHERE CONTAINS(fullplot, 'adventure')",
+        "category": "SELECT"
+    },
+    "multiple_or_conditions": {
+        "query": "SELECT * FROM movies WHERE rated = 'G' OR rated = 'PG' OR rated = 'PG-13' OR rated = 'R'",
+        "category": "SELECT"
+    },
+    "multiple_and_conditions": {
+        "query": "SELECT * FROM movies WHERE rated = 'PG' AND runtime > 90 AND runtime < 150 AND _id.year > '1990'",
+        "category": "SELECT"
+    }
+}

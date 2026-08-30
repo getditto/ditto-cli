@@ -74,17 +74,19 @@ Branch: `aaronlabeau/sdks-4855-dql-cli-tool`. This file is the working checklist
 
 ## M3 — Sample datasets (`ditto dql dataset`)
 
-**Goal:** vendored benchmark suites loadable as generated sample data; catalog queries runnable by name.
+**Goal:** vendored benchmark suites loadable as generated sample data; catalog queries runnable by name. ✅ DONE
 
-- [ ] `datasets/` at repo root, one module per suite — vendored from `getditto/dql-metrics-benchmark` (`benchmarks/{movies,retail,retail-joins,pos}/`): collection shapes, setup DDL (the suites' index statements), query catalog (`<collection>__<op>__<variant>` → statement + category + description), generator descriptor. **No NDJSON committed** — generators only.
-- [ ] `src/datasets/rng.ts` — mulberry32 seeded RNG + helpers (`int`, `pick`, `weighted`, `uuidv4-from-rng`, date walkers); determinism contract: same seed ⇒ identical docs (unit-tested)
-- [ ] `src/datasets/generators/` — per-suite generators: `movies` (synthesize from field pools — the benchmark's 23,539-doc source corpus is 37 MB LFS, **not** vendored), `retail` (fixed stores/categories/products catalogs + customers/inventory/orders/order_items scaled by `--docs`), `retail-joins` (normalized variant + `product_types`), `pos` (locations, sale_items w/ modifier groups, pos_orders w/ money objects). Shape/distribution fidelity only — **no byte-parity claim**; expected counts only where fixed by construction
-- [ ] `src/datasets/loader.ts` — batched insert (`INSERT … DOCUMENTS (deserialize_json(:doc))` style, 500–1000/batch), progress to stderr, `--seed` (default 42), `--docs`, `--batch-size`
-- [ ] Commands: `ditto dql dataset list | show <name> | load <name> | run <query> [--dataset] [--setup] | reset <name>`; `run` prints the resolved statement first, then standard result pipeline (`--time`/`--explain`/`--profile`/`-o` compose); write-category catalog queries require `--yes`
-- [ ] `reset` = EVICT all docs in the dataset's collections
+- [x] `datasets/` at repo root, one module per suite — vendored from `getditto/dql-metrics-benchmark` (`benchmarks/{movies,retail,retail-joins,pos}/benchmarks.json` copied verbatim — 49/72/96/44 catalog queries). Collection shapes, setup DDL, generator descriptors in `suite.ts`. **No NDJSON committed.**
+- [x] `src/datasets/rng.ts` — mulberry32 seeded RNG + helpers (int, pick, weighted, chance, gauss, poisson, sample, uuid); determinism unit-tested. `src/datasets/util.ts` — benchmark-exact `deterministicUuid` (SHA-256; Seattle store rls_user_id matches catalog literal) + `upsertAnchors` patch-or-append
+- [x] Generators: `movies` (synthesized from field pools — corpus not vendored; invariant repair for 1893/2001/"Star"), `retail` (faithful port: 8 stores/9 categories/400 products fixed, Poisson order walk spanning 2022-12→2025-12, anchors for catalog literals incl. `order_20250115_0001`, `john21@example.net`), `retail-joins` (normalized + 32 product_types, 8% inventory holes, anchor customer w/ 3 orders + `order_20221209_0001`), `pos` (7 locations, 47 sale_items w/ modifier groups, orders with money objects/cart modifiers/status logs/split payments; 2 anchor order ids)
+- [x] `src/datasets/loader.ts` — batched `INSERT … DOCUMENTS (deserialize_json(:docN))… ON ID CONFLICT DO UPDATE` (500/batch), stderr progress
+- [x] Commands: `ditto dql dataset list|show|load|run|reset`; `run` echoes the statement to stderr (stdout stays clean), `--setup` applies preQueries, write categories require `--yes` (postQueries cleanup applied), ambiguity error lists matches, `reset` = EVICT per collection (WHERE true), `list` supports `--format`
+- [x] `reset` confirmation via `--yes`
 
-**Tests:** unit — RNG determinism, generator shape/referential-integrity invariants per suite, catalog name resolution + ambiguity errors, statement printing; integration — `dataset load movies --docs 100` in tmpdir, run `movies__select__single_result`-style catalog queries, `reset` empties collections; e2e — `dataset list`/`show`/`run` output.
-**Exit:** `ditto dql dataset load retail --docs 1000` then `ditto dql dataset run stores__select__by_location_city` prints the statement and a populated table.
+**Commander bug found + fixed (tested):** a command with both a default action and subcommands swallows same-named child options (`-d`, `--format` silently dropped for `dataset run` — initially loaded data into the *default* store instead of `-d` target). Fixed by routing `ditto dql <stmt>` → explicit `dql exec <stmt>` via argv rewrite (`src/cli/default-command.ts`, unit-tested), with a regression test asserting subcommand flags reach the session.
+
+**Tests:** ✅ unit — RNG (8), registry/ambiguity (4), generator invariants per suite incl. determinism + anchors + referential integrity + money invariants (14), dataset command wiring (9), argv rewrite (7); ✅ integration — load movies/retail/retail-joins/pos into real store, catalog literals return rows, JOIN works, reset evicts only that dataset (5); ✅ e2e — list/show/load/run/reset round-trip + error paths (7).
+**Exit:** ✅ `ditto dql dataset load retail --docs 1000` then `ditto dql dataset run stores__select__by_location_city --dataset retail` prints the statement and a populated table. Coverage after M3: **90.9% stmts / 86.2% branches / 91.9% funcs / 91.6% lines** — gate holds.
 
 ## M4 — Time / Explain / Profile
 

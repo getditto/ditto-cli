@@ -1,0 +1,487 @@
+{
+    "stores__select__all": {
+        "query": "SELECT * FROM stores WHERE deleted = false",
+        "category": "SELECT"
+    },
+    "stores__select__by_id": {
+        "query": "SELECT * FROM stores WHERE _id = 'store_seattle'",
+        "category": "SELECT"
+    },
+    "stores__select__by_rls_user_id_indexed": {
+        "preQueries": [
+            "DROP INDEX IF EXISTS stores_rls ON stores",
+            "CREATE INDEX stores_rls ON stores (rls_user_id)"
+        ],
+        "query": "SELECT * FROM stores WHERE rls_user_id = '8d7e9536-74a1-4101-967d-7f3103baa401'",
+        "postQueries": [
+            "DROP INDEX IF EXISTS stores_rls ON stores"
+        ],
+        "category": "INDEX_SELECT"
+    },
+    "stores__select__by_location_city": {
+        "query": "SELECT * FROM stores WHERE location.city = 'Seattle' AND deleted = false",
+        "category": "SELECT"
+    },
+    "categories__select__all": {
+        "query": "SELECT * FROM categories WHERE deleted = false",
+        "category": "SELECT"
+    },
+    "categories__select__by_id": {
+        "query": "SELECT * FROM categories WHERE _id = 'cat_power_tools'",
+        "category": "SELECT"
+    },
+    "categories__select__seasonal_multiplier_gt": {
+        "query": "SELECT * FROM categories WHERE is_number(seasonal_multipliers.jun) AND seasonal_multipliers.jun > 1.5",
+        "category": "SELECT"
+    },
+    "customers__select__all": {
+        "query": "SELECT * FROM customers WHERE deleted = false",
+        "category": "SELECT"
+    },
+    "customers__select__by_id": {
+        "query": "SELECT * FROM customers WHERE _id = 'e652232a-95ab-4fcf-86b7-e40cea3d749d'",
+        "category": "SELECT"
+    },
+    "customers__select__by_email_no_index": {
+        "query": "SELECT * FROM customers WHERE email = 'john21@example.net'",
+        "category": "SELECT"
+    },
+    "customers__select__by_email_indexed": {
+        "preQueries": [
+            "DROP INDEX IF EXISTS customers_email ON customers",
+            "CREATE INDEX customers_email ON customers (email)"
+        ],
+        "query": "SELECT * FROM customers WHERE email = 'john21@example.net'",
+        "postQueries": [
+            "DROP INDEX IF EXISTS customers_email ON customers"
+        ],
+        "category": "INDEX_SELECT"
+    },
+    "customers__select__by_primary_store_no_index": {
+        "query": "SELECT * FROM customers WHERE primary_store_id = 'store_seattle' AND deleted = false",
+        "category": "SELECT"
+    },
+    "customers__select__by_primary_store_indexed": {
+        "preQueries": [
+            "DROP INDEX IF EXISTS customers_primary_store ON customers",
+            "CREATE INDEX customers_primary_store ON customers (primary_store_id, deleted)"
+        ],
+        "query": "SELECT * FROM customers WHERE primary_store_id = 'store_seattle' AND deleted = false",
+        "postQueries": [
+            "DROP INDEX IF EXISTS customers_primary_store ON customers"
+        ],
+        "category": "INDEX_SELECT"
+    },
+    "customers__select__soft_delete_filter": {
+        "query": "SELECT count(*) FROM customers WHERE deleted = false",
+        "category": "SELECT"
+    },
+    "customers__insert__one": {
+        "query": "INSERT INTO customers DOCUMENTS(deserialize_json('{\"_id\":\"bench-cust-insert-uuid\",\"customer_id\":\"bench-cust-insert-uuid\",\"first_name\":\"Bench\",\"last_name\":\"Test\",\"email\":\"bench-insert@example.com\",\"phone\":\"555-0100\",\"primary_store_id\":\"store_seattle\",\"created_at\":\"2025-12-09T00:00:00Z\",\"deleted\":false}')) ON ID CONFLICT DO UPDATE",
+        "postQueries": [
+            "EVICT FROM customers WHERE _id = 'bench-cust-insert-uuid'"
+        ],
+        "category": "INSERT"
+    },
+    "customers__update__email": {
+        "preQueries": [
+            "INSERT INTO customers DOCUMENTS(deserialize_json('{\"_id\":\"bench-cust-update-uuid\",\"customer_id\":\"bench-cust-update-uuid\",\"first_name\":\"Bench\",\"last_name\":\"Update\",\"email\":\"bench-update-old@example.com\",\"primary_store_id\":\"store_seattle\",\"created_at\":\"2025-12-09T00:00:00Z\",\"deleted\":false}'))"
+        ],
+        "query": "UPDATE customers SET email = 'bench-update-new@example.com' WHERE _id = 'bench-cust-update-uuid'",
+        "postQueries": [
+            "EVICT FROM customers WHERE _id = 'bench-cust-update-uuid'"
+        ],
+        "category": "UPDATE"
+    },
+    "customers__delete__by_id": {
+        "preQueries": [
+            "INSERT INTO customers DOCUMENTS(deserialize_json('{\"_id\":\"bench-cust-delete-uuid\",\"customer_id\":\"bench-cust-delete-uuid\",\"email\":\"bench-delete@example.com\",\"primary_store_id\":\"store_seattle\",\"deleted\":false}'))"
+        ],
+        "query": "DELETE FROM customers WHERE _id = 'bench-cust-delete-uuid'",
+        "category": "DELETE"
+    },
+    "customers__evict__by_id": {
+        "preQueries": [
+            "INSERT INTO customers DOCUMENTS(deserialize_json('{\"_id\":\"bench-cust-evict-uuid\",\"customer_id\":\"bench-cust-evict-uuid\",\"email\":\"bench-evict@example.com\",\"primary_store_id\":\"store_seattle\",\"deleted\":false}'))"
+        ],
+        "query": "EVICT FROM customers WHERE _id = 'bench-cust-evict-uuid'",
+        "category": "EVICT"
+    },
+    "products__select__all": {
+        "query": "SELECT * FROM products WHERE deleted = false",
+        "category": "SELECT"
+    },
+    "products__select__by_id": {
+        "query": "SELECT * FROM products WHERE _id = 'prod_pwr_0001'",
+        "category": "SELECT"
+    },
+    "products__select__by_sku_indexed": {
+        "preQueries": [
+            "DROP INDEX IF EXISTS products_sku ON products",
+            "CREATE INDEX products_sku ON products (sku)"
+        ],
+        "query": "SELECT * FROM products WHERE sku = 'PWR-0001'",
+        "postQueries": [
+            "DROP INDEX IF EXISTS products_sku ON products"
+        ],
+        "category": "INDEX_SELECT"
+    },
+    "products__select__by_category_no_index": {
+        "query": "SELECT * FROM products WHERE category_id = 'cat_power_tools' AND deleted = false",
+        "category": "SELECT"
+    },
+    "products__select__by_category_indexed": {
+        "preQueries": [
+            "DROP INDEX IF EXISTS products_category ON products",
+            "CREATE INDEX products_category ON products (category_id, deleted)"
+        ],
+        "query": "SELECT * FROM products WHERE category_id = 'cat_power_tools' AND deleted = false",
+        "postQueries": [
+            "DROP INDEX IF EXISTS products_category ON products"
+        ],
+        "category": "INDEX_SELECT"
+    },
+    "products__select__price_range_no_index": {
+        "query": "SELECT * FROM products WHERE base_price > 50 AND base_price < 200 AND deleted = false",
+        "category": "SELECT"
+    },
+    "products__select__price_range_indexed": {
+        "preQueries": [
+            "DROP INDEX IF EXISTS products_price ON products",
+            "CREATE INDEX products_price ON products (deleted, base_price)"
+        ],
+        "query": "SELECT * FROM products WHERE base_price > 50 AND base_price < 200 AND deleted = false",
+        "postQueries": [
+            "DROP INDEX IF EXISTS products_price ON products"
+        ],
+        "category": "INDEX_SELECT"
+    },
+    "products__select__spec_voltage": {
+        "query": "SELECT * FROM products WHERE specifications.voltage = '20V'",
+        "category": "SELECT"
+    },
+    "products__insert__one": {
+        "query": "INSERT INTO products DOCUMENTS(deserialize_json('{\"_id\":\"bench-prod-insert\",\"product_id\":\"bench-prod-insert\",\"sku\":\"BENCH-001\",\"product_name\":\"Bench Insert\",\"category_id\":\"cat_hand_tools\",\"cost\":10.0,\"base_price\":14.99,\"gross_margin_percent\":33.0,\"specifications\":{},\"deleted\":false}')) ON ID CONFLICT DO UPDATE",
+        "postQueries": [
+            "EVICT FROM products WHERE _id = 'bench-prod-insert'"
+        ],
+        "category": "INSERT"
+    },
+    "products__update__price": {
+        "preQueries": [
+            "INSERT INTO products DOCUMENTS(deserialize_json('{\"_id\":\"bench-prod-update\",\"product_id\":\"bench-prod-update\",\"sku\":\"BENCH-UPD\",\"product_name\":\"Bench Update\",\"category_id\":\"cat_hand_tools\",\"cost\":10.0,\"base_price\":14.99,\"gross_margin_percent\":33.0,\"specifications\":{},\"deleted\":false}'))"
+        ],
+        "query": "UPDATE products SET base_price = 19.99 WHERE _id = 'bench-prod-update'",
+        "postQueries": [
+            "EVICT FROM products WHERE _id = 'bench-prod-update'"
+        ],
+        "category": "UPDATE"
+    },
+    "products__evict__by_id": {
+        "preQueries": [
+            "INSERT INTO products DOCUMENTS(deserialize_json('{\"_id\":\"bench-prod-evict\",\"product_id\":\"bench-prod-evict\",\"sku\":\"BENCH-EV\",\"category_id\":\"cat_hand_tools\",\"base_price\":9.99,\"deleted\":false}'))"
+        ],
+        "query": "EVICT FROM products WHERE _id = 'bench-prod-evict'",
+        "category": "EVICT"
+    },
+    "inventory__select__all": {
+        "query": "SELECT * FROM inventory WHERE deleted = false",
+        "category": "SELECT"
+    },
+    "inventory__select__by_composite_id": {
+        "query": "SELECT * FROM inventory WHERE _id = {'store_id': 'store_seattle', 'product_id': 'prod_pwr_0001'}",
+        "category": "SELECT"
+    },
+    "inventory__select__by_store_no_index": {
+        "query": "SELECT * FROM inventory WHERE _id.store_id = 'store_seattle' AND deleted = false",
+        "category": "SELECT"
+    },
+    "inventory__select__by_store_indexed": {
+        "preQueries": [
+            "DROP INDEX IF EXISTS inventory_store ON inventory",
+            "CREATE INDEX inventory_store ON inventory (_id.store_id, deleted)"
+        ],
+        "query": "SELECT * FROM inventory WHERE _id.store_id = 'store_seattle' AND deleted = false",
+        "postQueries": [
+            "DROP INDEX IF EXISTS inventory_store ON inventory"
+        ],
+        "category": "INDEX_SELECT"
+    },
+    "inventory__select__by_product_no_index": {
+        "query": "SELECT * FROM inventory WHERE _id.product_id = 'prod_pwr_0001' AND deleted = false",
+        "category": "SELECT"
+    },
+    "inventory__select__by_product_indexed": {
+        "preQueries": [
+            "DROP INDEX IF EXISTS inventory_product ON inventory",
+            "CREATE INDEX inventory_product ON inventory (_id.product_id, deleted)"
+        ],
+        "query": "SELECT * FROM inventory WHERE _id.product_id = 'prod_pwr_0001' AND deleted = false",
+        "postQueries": [
+            "DROP INDEX IF EXISTS inventory_product ON inventory"
+        ],
+        "category": "INDEX_SELECT"
+    },
+    "inventory__select__low_stock_no_index": {
+        "query": "SELECT * FROM inventory WHERE stock_level < 5 AND _id.store_id = 'store_seattle' AND deleted = false",
+        "category": "SELECT"
+    },
+    "inventory__select__low_stock_indexed": {
+        "preQueries": [
+            "DROP INDEX IF EXISTS inventory_store_stock ON inventory",
+            "CREATE INDEX inventory_store_stock ON inventory (_id.store_id, stock_level)"
+        ],
+        "query": "SELECT * FROM inventory WHERE stock_level < 5 AND _id.store_id = 'store_seattle' AND deleted = false",
+        "postQueries": [
+            "DROP INDEX IF EXISTS inventory_store_stock ON inventory"
+        ],
+        "category": "INDEX_SELECT"
+    },
+    "inventory__select__by_aisle": {
+        "query": "SELECT * FROM inventory WHERE location.aisle = '3' AND _id.store_id = 'store_seattle' AND deleted = false",
+        "category": "SELECT"
+    },
+    "inventory__update__stock_decrement": {
+        "preQueries": [
+            "INSERT INTO inventory DOCUMENTS(deserialize_json('{\"_id\":{\"store_id\":\"store_seattle\",\"product_id\":\"bench-inv-stock\"},\"store_id\":\"store_seattle\",\"product_id\":\"bench-inv-stock\",\"stock_level\":100,\"location\":{\"aisle\":\"1\",\"shelf\":\"A\",\"bin\":\"1\"},\"deleted\":false}'))"
+        ],
+        "query": "UPDATE inventory SET stock_level = 99 WHERE _id = {'store_id': 'store_seattle', 'product_id': 'bench-inv-stock'}",
+        "postQueries": [
+            "EVICT FROM inventory WHERE _id = {'store_id': 'store_seattle', 'product_id': 'bench-inv-stock'}"
+        ],
+        "category": "UPDATE"
+    },
+    "inventory__insert__one": {
+        "query": "INSERT INTO inventory DOCUMENTS(deserialize_json('{\"_id\":{\"store_id\":\"store_seattle\",\"product_id\":\"bench-inv-insert\"},\"store_id\":\"store_seattle\",\"product_id\":\"bench-inv-insert\",\"stock_level\":50,\"location\":{\"aisle\":\"1\",\"shelf\":\"A\",\"bin\":\"1\"},\"deleted\":false}')) ON ID CONFLICT DO UPDATE",
+        "postQueries": [
+            "EVICT FROM inventory WHERE _id = {'store_id': 'store_seattle', 'product_id': 'bench-inv-insert'}"
+        ],
+        "category": "INSERT"
+    },
+    "inventory__delete__by_id": {
+        "preQueries": [
+            "INSERT INTO inventory DOCUMENTS(deserialize_json('{\"_id\":{\"store_id\":\"store_seattle\",\"product_id\":\"bench-inv-delete\"},\"store_id\":\"store_seattle\",\"product_id\":\"bench-inv-delete\",\"stock_level\":1,\"deleted\":false}'))"
+        ],
+        "query": "DELETE FROM inventory WHERE _id = {'store_id': 'store_seattle', 'product_id': 'bench-inv-delete'}",
+        "category": "DELETE"
+    },
+    "orders__select__all": {
+        "query": "SELECT * FROM orders WHERE deleted = false",
+        "category": "SELECT"
+    },
+    "orders__select__by_id": {
+        "query": "SELECT * FROM orders WHERE _id = 'order_20250115_0001'",
+        "category": "SELECT"
+    },
+    "orders__select__by_customer_no_index": {
+        "query": "SELECT * FROM orders WHERE customer_id = 'd0b7e4cf-2479-4bd6-933b-7c260eefe0ee' AND deleted = false",
+        "category": "SELECT"
+    },
+    "orders__select__by_customer_indexed": {
+        "preQueries": [
+            "DROP INDEX IF EXISTS orders_customer ON orders",
+            "CREATE INDEX orders_customer ON orders (customer_id, deleted)"
+        ],
+        "query": "SELECT * FROM orders WHERE customer_id = 'd0b7e4cf-2479-4bd6-933b-7c260eefe0ee' AND deleted = false",
+        "postQueries": [
+            "DROP INDEX IF EXISTS orders_customer ON orders"
+        ],
+        "category": "INDEX_SELECT"
+    },
+    "orders__select__by_store_no_index": {
+        "query": "SELECT * FROM orders WHERE store_id = 'store_seattle' AND deleted = false",
+        "category": "SELECT"
+    },
+    "orders__select__by_store_indexed": {
+        "preQueries": [
+            "DROP INDEX IF EXISTS orders_store ON orders",
+            "CREATE INDEX orders_store ON orders (store_id, deleted)"
+        ],
+        "query": "SELECT * FROM orders WHERE store_id = 'store_seattle' AND deleted = false",
+        "postQueries": [
+            "DROP INDEX IF EXISTS orders_store ON orders"
+        ],
+        "category": "INDEX_SELECT"
+    },
+    "orders__select__by_date_range_no_index": {
+        "query": "SELECT * FROM orders WHERE order_date > '2025-05-24' AND order_date < '2025-06-28' AND deleted = false",
+        "category": "SELECT"
+    },
+    "orders__select__by_date_range_indexed": {
+        "preQueries": [
+            "DROP INDEX IF EXISTS orders_date ON orders",
+            "CREATE INDEX orders_date ON orders (deleted, order_date)"
+        ],
+        "query": "SELECT * FROM orders WHERE order_date > '2025-05-24' AND order_date < '2025-06-28' AND deleted = false",
+        "postQueries": [
+            "DROP INDEX IF EXISTS orders_date ON orders"
+        ],
+        "category": "INDEX_SELECT"
+    },
+    "orders__select__multi_field_indexed": {
+        "preQueries": [
+            "DROP INDEX IF EXISTS orders_store_status_date ON orders",
+            "CREATE INDEX orders_store_status_date ON orders (store_id, status, order_date)"
+        ],
+        "query": "SELECT * FROM orders WHERE store_id = 'store_seattle' AND status = 'completed' AND order_date > '2024-11-27'",
+        "postQueries": [
+            "DROP INDEX IF EXISTS orders_store_status_date ON orders"
+        ],
+        "category": "INDEX_SELECT"
+    },
+    "orders__select__by_status_indexed": {
+        "preQueries": [
+            "DROP INDEX IF EXISTS orders_status ON orders",
+            "CREATE INDEX orders_status ON orders (status, deleted)"
+        ],
+        "query": "SELECT * FROM orders WHERE status = 'completed' AND deleted = false",
+        "postQueries": [
+            "DROP INDEX IF EXISTS orders_status ON orders"
+        ],
+        "category": "INDEX_SELECT"
+    },
+    "orders__aggregation__count_by_store": {
+        "query": "SELECT store_id, COUNT(*) FROM orders WHERE deleted = false GROUP BY store_id",
+        "category": "AGGREGATION"
+    },
+    "orders__aggregation__sum_total_by_status": {
+        "query": "SELECT status, SUM(total) FROM orders WHERE deleted = false GROUP BY status",
+        "category": "AGGREGATION"
+    },
+    "orders__aggregation__count_by_month": {
+        "query": "SELECT substr(order_date, 0, 7) AS month, COUNT(*) FROM orders WHERE deleted = false GROUP BY substr(order_date, 0, 7) ORDER BY substr(order_date, 0, 7) DESC LIMIT 12",
+        "category": "AGGREGATION"
+    },
+    "orders__insert__one": {
+        "query": "INSERT INTO orders DOCUMENTS(deserialize_json('{\"_id\":\"bench-order-insert\",\"order_id\":\"bench-order-insert\",\"customer_id\":\"bench-customer\",\"store_id\":\"store_seattle\",\"order_date\":\"2025-12-09T10:00:00Z\",\"customer_name\":\"Bench\",\"store_name\":\"Seattle\",\"item_count\":1,\"subtotal\":99.99,\"total\":109.49,\"status\":\"completed\",\"deleted\":false}')) ON ID CONFLICT DO UPDATE",
+        "postQueries": [
+            "EVICT FROM orders WHERE _id = 'bench-order-insert'"
+        ],
+        "category": "INSERT"
+    },
+    "orders__update__status": {
+        "preQueries": [
+            "INSERT INTO orders DOCUMENTS(deserialize_json('{\"_id\":\"bench-order-update\",\"order_id\":\"bench-order-update\",\"customer_id\":\"bench-c\",\"store_id\":\"store_seattle\",\"order_date\":\"2025-12-09T10:00:00Z\",\"total\":50.0,\"status\":\"pending\",\"deleted\":false}'))"
+        ],
+        "query": "UPDATE orders SET status = 'completed' WHERE _id = 'bench-order-update'",
+        "postQueries": [
+            "EVICT FROM orders WHERE _id = 'bench-order-update'"
+        ],
+        "category": "UPDATE"
+    },
+    "orders__delete__by_id": {
+        "preQueries": [
+            "INSERT INTO orders DOCUMENTS(deserialize_json('{\"_id\":\"bench-order-delete\",\"order_id\":\"bench-order-delete\",\"customer_id\":\"bench-c\",\"store_id\":\"store_seattle\",\"order_date\":\"2025-12-09T10:00:00Z\",\"total\":10.0,\"status\":\"completed\",\"deleted\":false}'))"
+        ],
+        "query": "DELETE FROM orders WHERE _id = 'bench-order-delete'",
+        "category": "DELETE"
+    },
+    "order_items__select__all": {
+        "query": "SELECT * FROM order_items WHERE deleted = false",
+        "category": "SELECT"
+    },
+    "order_items__select__by_id": {
+        "query": "SELECT * FROM order_items WHERE _id = '705d8eda-4606-4551-b505-5d230d38aa8a'",
+        "category": "SELECT"
+    },
+    "order_items__select__by_order_no_index": {
+        "query": "SELECT * FROM order_items WHERE order_id = 'order_20250115_0001'",
+        "category": "SELECT"
+    },
+    "order_items__select__by_order_indexed": {
+        "preQueries": [
+            "DROP INDEX IF EXISTS order_items_order ON order_items",
+            "CREATE INDEX order_items_order ON order_items (order_id)"
+        ],
+        "query": "SELECT * FROM order_items WHERE order_id = 'order_20250115_0001'",
+        "postQueries": [
+            "DROP INDEX IF EXISTS order_items_order ON order_items"
+        ],
+        "category": "INDEX_SELECT"
+    },
+    "order_items__select__by_store_indexed": {
+        "preQueries": [
+            "DROP INDEX IF EXISTS order_items_store ON order_items",
+            "CREATE INDEX order_items_store ON order_items (store_id, deleted)"
+        ],
+        "query": "SELECT * FROM order_items WHERE store_id = 'store_seattle' AND deleted = false",
+        "postQueries": [
+            "DROP INDEX IF EXISTS order_items_store ON order_items"
+        ],
+        "category": "INDEX_SELECT"
+    },
+    "order_items__select__by_product_no_index": {
+        "query": "SELECT * FROM order_items WHERE product_id = 'prod_pwr_0001'",
+        "category": "SELECT"
+    },
+    "order_items__select__by_product_indexed": {
+        "preQueries": [
+            "DROP INDEX IF EXISTS order_items_product ON order_items",
+            "CREATE INDEX order_items_product ON order_items (product_id)"
+        ],
+        "query": "SELECT * FROM order_items WHERE product_id = 'prod_pwr_0001'",
+        "postQueries": [
+            "DROP INDEX IF EXISTS order_items_product ON order_items"
+        ],
+        "category": "INDEX_SELECT"
+    },
+    "order_items__aggregation__sum_quantity_by_product": {
+        "query": "SELECT product_id, SUM(quantity) FROM order_items WHERE deleted = false GROUP BY product_id",
+        "category": "AGGREGATION"
+    },
+    "order_items__aggregation__top_products_by_revenue": {
+        "query": "SELECT product_id, SUM(line_total) AS revenue FROM order_items WHERE deleted = false GROUP BY product_id ORDER BY revenue DESC LIMIT 10",
+        "category": "AGGREGATION"
+    },
+    "order_items__insert__one": {
+        "query": "INSERT INTO order_items DOCUMENTS(deserialize_json('{\"_id\":\"bench-item-insert\",\"order_id\":\"bench-order\",\"store_id\":\"store_seattle\",\"product_id\":\"prod_pwr_0001\",\"sku\":\"PWR-0001\",\"product_name\":\"Bench\",\"quantity\":1,\"unit_price\":99.99,\"discount_percent\":0,\"line_total\":99.99,\"deleted\":false}')) ON ID CONFLICT DO UPDATE",
+        "postQueries": [
+            "EVICT FROM order_items WHERE _id = 'bench-item-insert'"
+        ],
+        "category": "INSERT"
+    },
+    "order_items__evict__by_id": {
+        "preQueries": [
+            "INSERT INTO order_items DOCUMENTS(deserialize_json('{\"_id\":\"bench-item-evict\",\"order_id\":\"bench-order\",\"store_id\":\"store_seattle\",\"product_id\":\"prod_pwr_0001\",\"deleted\":false}'))"
+        ],
+        "query": "EVICT FROM order_items WHERE _id = 'bench-item-evict'",
+        "category": "EVICT"
+    },
+    "subscription__customers_all": {
+        "query": "SELECT * FROM customers WHERE deleted = false",
+        "category": "SELECT"
+    },
+    "subscription__inventory_by_store": {
+        "preQueries": [
+            "DROP INDEX IF EXISTS inventory_store_sub ON inventory",
+            "CREATE INDEX inventory_store_sub ON inventory (_id.store_id, deleted)"
+        ],
+        "query": "SELECT * FROM inventory WHERE _id.store_id = 'store_seattle' AND deleted = false",
+        "postQueries": [
+            "DROP INDEX IF EXISTS inventory_store_sub ON inventory"
+        ],
+        "category": "INDEX_SELECT"
+    },
+    "subscription__orders_by_store": {
+        "preQueries": [
+            "DROP INDEX IF EXISTS orders_store_sub ON orders",
+            "CREATE INDEX orders_store_sub ON orders (store_id, deleted)"
+        ],
+        "query": "SELECT * FROM orders WHERE store_id = 'store_seattle' AND deleted = false",
+        "postQueries": [
+            "DROP INDEX IF EXISTS orders_store_sub ON orders"
+        ],
+        "category": "INDEX_SELECT"
+    },
+    "subscription__order_items_by_store": {
+        "preQueries": [
+            "DROP INDEX IF EXISTS order_items_store_sub ON order_items",
+            "CREATE INDEX order_items_store_sub ON order_items (store_id, deleted)"
+        ],
+        "query": "SELECT * FROM order_items WHERE store_id = 'store_seattle' AND deleted = false",
+        "postQueries": [
+            "DROP INDEX IF EXISTS order_items_store_sub ON order_items"
+        ],
+        "category": "INDEX_SELECT"
+    }
+}
