@@ -22,6 +22,41 @@ function failingExecutor(message: string, code = "query/invalid"): QueryExecutor
   };
 }
 
+const FAKE_ENVELOPE = {
+  "~request_profile": {
+    _id: "prof-1",
+    queryType: "select",
+    state: "completed",
+    resultCount: 2,
+    times: { elapsed: 1_670_000, parse: 46_210, plan: 136_880, start: "2026-08-29T17:55:49Z" },
+    plan: {
+      "#operator": "sequence",
+      children: [
+        { "#operator": "scan", collection: "movies", "#stats": { documentsOut: 2, phaseTimes: { exec: 100_000 } }, children: [] },
+        { "#operator": "filter", condition: "rated = 'PG'", "#stats": { documentsIn: 2, documentsOut: 2, phaseTimes: { exec: 900_000 } }, children: [] },
+      ],
+    },
+  },
+};
+
+function profileExecutor(rows: Record<string, unknown>[], withEnvelope = true) {
+  const calls: string[] = [];
+  const executor: QueryExecutor = {
+    execute: async (statement: string) => {
+      calls.push(statement);
+      const items = rows.map((value) => ({ value }));
+      if (withEnvelope && statement.startsWith("PROFILE ")) {
+        items.push({ value: FAKE_ENVELOPE });
+      }
+      if (statement.startsWith("EXPLAIN ")) {
+        return { items: [{ value: { plan: { operator: "sequence", children: [] } } }] } as unknown as QueryResult;
+      }
+      return { items } as unknown as QueryResult;
+    },
+  };
+  return { executor, calls };
+}
+
 let outSpy: ReturnType<typeof vi.spyOn>;
 let errSpy: ReturnType<typeof vi.spyOn>;
 
@@ -143,5 +178,68 @@ describe("runStatement", () => {
       rmrf(process.env.DITTO_CONFIG_DIR);
       process.env.DITTO_CONFIG_DIR = undefined;
     }
+  });
+});
+
+describe("runStatement diagnostics (--time/--explain/--profile)", () => {
+  const rows = [{ _id: "1", title: "Alien" }];
+
+  it("--profile prefixes PROFILE onto bare SELECTs and renders the profile", async () => {
+    const { executor, calls } = profileExecutor(rows);
+    const r = await runStatement(executor, "SELECT * FROM movies WHERE rated = 'PG'", {
+      ...baseOpts,
+      format: "json",
+      profile: true,
+    });
+    expect(calls[0]).toBe("PROFILE SELECT * FROM movies WHERE rated = 'PG'");
+    expect(r.profile?.queryType).toBe("select");
+    const out = outSpy.mock.calls.flat().join("\n");
+    expect(out).toContain("Execution Profile");
+    expect(out).toContain("▲ HOT"); // filter has 90% of exec in the fake envelope
+    // envelope row must not leak into the result rows
+    expect(out).not.toContain("~request_profile");
+  });
+
+  it("--profile never double-prefixes a user-typed PROFILE", async () => {
+    const { executor, calls } = profileExecutor(rows);
+    await runStatement(executor, "PROFILE SELECT * FROM movies", { ...baseOpts, format: "json", profile: true });
+    expect(calls[0]).toBe("PROFILE SELECT * FROM movies");
+  });
+
+  it("--profile on non-SELECT runs without prefix and prints a note", async () => {
+    const { executor, calls } = profileExecutor([]);
+    const r = await runStatement(executor, "INSERT INTO movies DOCUMENTS ({'_id':'1'})", {
+      ...baseOpts,
+      profile: true,
+    });
+    expect(calls[0]).toBe("INSERT INTO movies DOCUMENTS ({'_id':'1'})");
+    expect(errSpy.mock.calls.flat().join(" ")).toContain("only SELECT statements are profilable");
+    expect(r.ok).toBe(true);
+  });
+
+  it("--explain runs the side-trip for SELECTs and renders the plan", async () => {
+    const { executor, calls } = profileExecutor(rows);
+    await runStatement(executor, "SELECT * FROM movies", { ...baseOpts, format: "json", explain: true });
+    expect(calls).toEqual(["SELECT * FROM movies", "EXPLAIN SELECT * FROM movies"]);
+    expect(outSpy.mock.calls.flat().join("\n")).toContain("Query plan");
+  });
+
+  it("--explain never side-trips ADVISE (invalid syntax upstream)", async () => {
+    const { executor, calls } = profileExecutor(rows);
+    await runStatement(executor, "ADVISE SELECT * FROM movies", { ...baseOpts, format: "json", explain: true, profile: true });
+    expect(calls).toEqual(["ADVISE SELECT * FROM movies"]);
+  });
+
+  it("--time prints a footer; server times appear when a profile is present", async () => {
+    const { executor } = profileExecutor(rows);
+    await runStatement(executor, "SELECT * FROM movies", { ...baseOpts, format: "json", time: true });
+    expect(errSpy.mock.calls.flat().join(" ")).toMatch(/Time: [\d.]+ ms/);
+
+    errSpy.mockClear();
+    const { executor: withProf } = profileExecutor(rows);
+    await runStatement(withProf, "SELECT * FROM movies", { ...baseOpts, format: "json", time: true, profile: true });
+    const footer = errSpy.mock.calls.flat().join(" ");
+    expect(footer).toContain("server: elapsed 1.67 ms");
+    expect(footer).toContain("parse 46.21 µs");
   });
 });

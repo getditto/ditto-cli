@@ -88,19 +88,19 @@ Branch: `aaronlabeau/sdks-4855-dql-cli-tool`. This file is the working checklist
 **Tests:** ✅ unit — RNG (8), registry/ambiguity (4), generator invariants per suite incl. determinism + anchors + referential integrity + money invariants (14), dataset command wiring (9), argv rewrite (7); ✅ integration — load movies/retail/retail-joins/pos into real store, catalog literals return rows, JOIN works, reset evicts only that dataset (5); ✅ e2e — list/show/load/run/reset round-trip + error paths (7).
 **Exit:** ✅ `ditto dql dataset load retail --docs 1000` then `ditto dql dataset run stores__select__by_location_city --dataset retail` prints the statement and a populated table. Coverage after M3: **90.9% stmts / 86.2% branches / 91.9% funcs / 91.6% lines** — gate holds.
 
-## M4 — Time / Explain / Profile
+## M4 — Time / Explain / Profile ✅ DONE
 
-- [ ] Spike C: run `PROFILE SELECT …` against real SDK, capture envelope, compare to Edge Studio fixture; adjust model
-- [ ] `src/profile/parse.ts` — `~request_profile` detection (wrapped + bare form via marker fields: `times`/`queryType`/`requestType`/`featureFlags`/`state`/`resultCount`, deliberately not `text`), tolerant optional fields, `QueryProfile` model
-- [ ] `src/profile/formatNs.ts` — exact Edge Studio rules; `percentOfTotal(ns, total, 0.05)`; hotspot = exec ≥ 50% of subtree-total exec
-- [ ] `src/render/profileTree.ts` — header (query, captured time), summary strip (Elapsed/Parse/Plan/Result count/QueryType), ASCII tree (`├──`/`└──`, per-node `operator keyAttr ── exec (pct) ── N in / M out`, `▲` hotspot marker), legend footer
-- [ ] `src/render/explain.ts` — pretty JSON w/ chalk highlighting; tree form when operators recognizable; raw fallback always
-- [ ] `--time` — `performance.now()` around execute; footer line; merges server-side times when profile present
-- [ ] Execution gating (Edge Studio rules): PROFILE prefix only for bare SELECT; never `PROFILE PROFILE`; no EXPLAIN side-trip on ADVISE/EXPLAIN-typed statements; non-SELECT + `--profile` → "only SELECT statements are profilable" note
-- [ ] Copy Edge Studio profile fixtures into `tests/unit/fixtures/`
+- [x] Spike C: real envelope captured to fixture; `database_id` vs `app_id` difference found and handled
+- [x] `src/profile/parse.ts` — `~request_profile` detection (wrapped + bare via marker fields: `times`/`queryType`/`requestType`/`featureFlags`/`state`/`resultCount`, deliberately not `text`), tolerant optional fields, `QueryProfile`/`PlanNode` model
+- [x] `src/profile/format.ts` — exact Edge Studio rules; `percentOfTotal(ns, total, 0.05)`; `src/profile/hotspots.ts` — subtree exec, hotspot = exec ≥ 50% of plan-total, `keyAttribute` priority (collection/alias/limit/field/table/condition)
+- [x] `src/render/profile.ts` — header (query, captured time, profile id), summary strip (Elapsed/Parse/Plan/Results/Type/State), ASCII tree (`└─`, per-node `exec (pct) · N in / M out`, `▲ HOT` marker), legend footer
+- [x] `src/render/explain.ts` — operator tree when recognizable (real 5.1 EXPLAIN uses `operator`/`children` — verified), highlighted raw JSON fallback
+- [x] `--time` — `performance.now()` footer; merges server-side elapsed/parse/plan when a profile is present
+- [x] Execution gating (Edge Studio rules, unit-tested): PROFILE prefix only for bare SELECT; never `PROFILE PROFILE`; no EXPLAIN side-trip on ADVISE; non-SELECT + `--profile` → "only SELECT statements are profilable" note to stderr
+- [x] Wired into `dql exec` and `dql dataset run` (`--time`/`--explain`/`--profile`)
 
-**Tests:** unit — parser vs. fixtures + Spike-C real capture, formatNs boundaries, hotspot math, tree snapshots, gating matrix; integration — live EXPLAIN/PROFILE parse round-trip; e2e — `--profile` output contains summary strip + tree.
-**Exit:** `ditto dql --profile "SELECT …"` renders the full profile view.
+**Tests:** ✅ unit — parser vs. real fixture (parse fields, bare-form marker rule, no `text` false-positive, stats/attributes, reserved-key exclusion), formatNs boundaries, percentOfTotal, hotspots, keyAttribute, renderProfile snapshot-ish assertions, renderExplain tree + fallback, runStatement gating matrix (prefix/no-double-prefix/non-SELECT note/ADVISE never side-tripped, --time footer with server times); ✅ integration — live `--profile` envelope parsed with real plan tree, `--explain` side-trip, `--time` server merge; ✅ e2e — `--profile` view + `--time` footer, non-SELECT note. **242/242 green; coverage 92.1/87.1/93.6/92.7 — gate holds.**
+**Exit:** ✅ `ditto dql --profile "SELECT …"` renders the full profile view (verified live against the real store).
 
 ## M5 — Advise
 
@@ -173,5 +173,5 @@ Branch: `aaronlabeau/sdks-4855-dql-cli-tool`. This file is the working checklist
 
 - **Spike A (v5.1 init + offline token):** ✅ PASS (2026-08-29, `scripts/spike-a.mjs`). `sdk.init()` → `new DittoConfig(appId, { mode: "smallPeersOnly" }, storeDir)` → `Ditto.open(config)` → `setOfflineOnlyLicenseToken(token)` all work on `@dittolive/ditto@5.1.0` with the dev offline playground token. INSERT with `COLLECTION … (field MAP/COUNTER)` + `ON ID CONFLICT DO UPDATE` ✅, parameterized SELECT ✅, `EXPLAIN` returns first item keyed `plan` ✅, `PROFILE` appends trailing item keyed `~request_profile` ✅, `close()` clean ✅. **Gotcha:** SDK emits verbose INFO/WARN logs on open — the CLI must set the SDK log level to error-only (investigate `DittoLogger`/env) so output stays pipeable.
 - **Spike B (lock error shape):** ✅ PASS (2026-08-29). Two processes on one data dir: second `Ditto.open` throws with message containing "File already locked" — mapped to exit code 4 with an actionable message ("The data directory is in use by another ditto process: <path> …").
-- **Spike C (real profile envelope vs. fixture):** _pending — Spike A confirmed trailing key `~request_profile`; full field capture happens here_
+- **Spike C (real profile envelope vs. fixture):** ✅ PASS (2026-08-29, `scripts/spike-c.mjs` → `tests/unit/fixtures/profile-envelope.json`). Confirmed envelope keys on SDK 5.1.0: `_id, database_id, directives, featureFlags, plan, queryType, requestType, resultCount, state, text, times{elapsed,parse,plan,start}`. **Differs from Edge Studio's assumption in one field: `database_id` (not `app_id`)** — parser accepts both. Plan tree uses `#operator`/`#stats`/`children` as expected.
 - **Known cosmetic issue:** the native tracing bootstrap writes ~7 WARN/INFO lines to stderr at `sdk.init()` via fd-level writes — not suppressible from JS (`Logger.enabled=false` kills all open-time logs; `RUST_LOG`/`DITTO_LOG` ignored). stdout stays pure, piping unaffected. Possible SDK-team follow-up.

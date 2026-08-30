@@ -21,6 +21,9 @@ interface ExecOpts {
   param?: string[];
   args?: string;
   continueOnError?: boolean;
+  time?: boolean;
+  explain?: boolean;
+  profile?: boolean;
 }
 
 async function openSession(opts: ExecOpts): Promise<DittoSession | null> {
@@ -43,6 +46,9 @@ function execRunOpts(opts: ExecOpts) {
     maxRowsExplicit: (opts.maxRows ?? "10000") !== "10000",
     out: opts.out,
     params: parseParams(opts.param, opts.args),
+    time: opts.time,
+    explain: opts.explain,
+    profile: opts.profile,
   };
 }
 
@@ -136,6 +142,9 @@ export function registerDqlGroup(dql: ReturnType<Command["command"]>): void {
     .option("--format <format>", "table | json | csv")
     .option("--max-rows <n>", "maximum rows to display", "10000")
     .option("--continue-on-error", "keep running statements after a failure (-f/stdin)", false)
+    .option("--time", "print timing after the results", false)
+    .option("--explain", "run EXPLAIN on the statement and print the plan", false)
+    .option("--profile", "run PROFILE on SELECT statements and print the execution profile", false)
     .action(async (statement: string | undefined, opts: ExecOpts) => {
       let params: ReturnType<typeof parseParams>;
       try {

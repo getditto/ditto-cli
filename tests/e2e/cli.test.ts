@@ -147,4 +147,34 @@ describe.skipIf(!hasDevCredentials)(`e2e: ditto dql (${NO_CREDENTIALS})`, () => 
     expect(r.exitCode).toBe(2);
     expect(r.stderr).toContain("No statements");
   });
+
+  it("--profile renders the profile view end-to-end", async () => {
+    const dir = tmpDataDir("ditto-e2e-");
+    try {
+      await cli(["dql", "INSERT INTO movies DOCUMENTS ({'_id':'e1','title':'Alien','rated':'R'}) ON ID CONFLICT DO UPDATE", "-d", dir]);
+      const r = (await cli(["dql", "SELECT * FROM movies WHERE rated = 'R'", "-d", dir, "--profile", "--time"])) as unknown as RunResult;
+      expect(r.exitCode).toBe(0);
+      expect(r.stdout).toContain("Execution Profile");
+      expect(r.stdout).toContain("Execution plan");
+      expect(r.stdout).toContain("scan");
+      expect(r.stderr).toMatch(/Time: [\d.]+ ms/);
+    } finally {
+      rmrf(dir);
+    }
+  });
+
+  it("--explain prints the plan; non-SELECT with --profile prints the note", async () => {
+    const dir = tmpDataDir("ditto-e2e-");
+    try {
+      await cli(["dql", "INSERT INTO movies DOCUMENTS ({'_id':'e1','title':'Alien'}) ON ID CONFLICT DO UPDATE", "-d", dir]);
+      const ex = (await cli(["dql", "SELECT * FROM movies", "-d", dir, "--explain"])) as unknown as RunResult;
+      expect(ex.exitCode).toBe(0);
+      expect(ex.stdout).toContain("Query plan");
+
+      const nonSelect = (await cli(["dql", "INSERT INTO movies DOCUMENTS ({'_id':'e2','title':'B'}) ON ID CONFLICT DO UPDATE", "-d", dir, "--profile"])) as unknown as RunResult;
+      expect(nonSelect.stderr).toContain("only SELECT statements are profilable");
+    } finally {
+      rmrf(dir);
+    }
+  });
 });

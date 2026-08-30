@@ -1,0 +1,207 @@
+{
+  "capturedAt": "2026-08-30T00:13:30.899Z",
+  "sdkVersion": "5.1.0",
+  "profiles": [
+    {
+      "query": "PROFILE SELECT * FROM movies WHERE rated = 'PG'",
+      "itemCount": 51,
+      "envelope": {
+        "~request_profile": {
+          "_id": "494464d7-68ca-4cf4-adf3-43a4daeef076",
+          "database_id": "eeb08fe8-e140-4b5f-83ef-784907a507dc",
+          "directives": {
+            "#profile": true
+          },
+          "featureFlags": "0x83a",
+          "plan": {
+            "#operator": "sequence",
+            "children": [
+              {
+                "#operator": "scan",
+                "#stats": {
+                  "documentsOut": 200,
+                  "phaseTimes": {
+                    "exec": 27973,
+                    "recv": 220293,
+                    "send": 245004
+                  },
+                  "yields": {
+                    "budget": 3,
+                    "receiver": 1
+                  }
+                },
+                "alias": "movies",
+                "collection": "movies",
+                "datasource": "default",
+                "descriptor": {
+                  "diff_scan_condition": "never"
+                }
+              },
+              {
+                "#operator": "filter",
+                "#stats": {
+                  "documentsIn": 200,
+                  "documentsOut": 50,
+                  "phaseTimes": {
+                    "exec": 126843,
+                    "send": 15077
+                  }
+                },
+                "condition": "(`movies`.`rated` = \"PG\")"
+              },
+              {
+                "#operator": "finalProjection",
+                "#stats": {
+                  "documentsIn": 50,
+                  "documentsOut": 50,
+                  "phaseTimes": {
+                    "exec": 2245,
+                    "recv": 497996,
+                    "send": 11006
+                  },
+                  "yields": {
+                    "receiver": 32
+                  }
+                }
+              }
+            ]
+          },
+          "queryType": "select",
+          "requestType": "SDK",
+          "resultCount": 50,
+          "state": "completed",
+          "text": "PROFILE SELECT * FROM movies WHERE rated = 'PG'",
+          "times": {
+            "elapsed": 3122137,
+            "parse": 1542862,
+            "plan": 452645,
+            "start": "2026-08-29T19:13:30.849-05:00"
+          }
+        }
+      }
+    },
+    {
+      "query": "PROFILE SELECT * FROM movies WHERE year > '2000' AND rated = 'R' ORDER BY year DESC LIMIT 10",
+      "itemCount": 11,
+      "envelope": {
+        "~request_profile": {
+          "_id": "0f03dec7-918a-40ed-a8d9-d72e334fd770",
+          "database_id": "eeb08fe8-e140-4b5f-83ef-784907a507dc",
+          "directives": {
+            "#profile": true
+          },
+          "featureFlags": "0x83a",
+          "plan": {
+            "#operator": "sequence",
+            "children": [
+              {
+                "#operator": "scan",
+                "#stats": {
+                  "documentsOut": 200,
+                  "phaseTimes": {
+                    "exec": 18021,
+                    "recv": 317389,
+                    "send": 170150
+                  },
+                  "yields": {
+                    "budget": 3,
+                    "receiver": 2
+                  }
+                },
+                "alias": "movies",
+                "collection": "movies",
+                "datasource": "default",
+                "descriptor": {
+                  "diff_scan_condition": "never"
+                }
+              },
+              {
+                "#operator": "filter",
+                "#stats": {
+                  "documentsIn": 200,
+                  "documentsOut": 12,
+                  "phaseTimes": {
+                    "exec": 140110,
+                    "send": 11833
+                  }
+                },
+                "condition": "((`movies`.`year` > \"2000\") AND (`movies`.`rated` = \"R\"))"
+              },
+              {
+                "#operator": "sort",
+                "#stats": {
+                  "documentsIn": 12,
+                  "documentsOut": 10,
+                  "phaseTimes": {
+                    "exec": 82493,
+                    "recv": 423770,
+                    "send": 1791
+                  },
+                  "yields": {
+                    "receiver": 5
+                  }
+                },
+                "limit": 10,
+                "orderBy": [
+                  {
+                    "direction": "desc",
+                    "key": "`movies`.`year`"
+                  }
+                ]
+              },
+              {
+                "#operator": "finalProjection",
+                "#stats": {
+                  "documentsIn": 10,
+                  "documentsOut": 10,
+                  "phaseTimes": {
+                    "exec": 585,
+                    "recv": 533701,
+                    "send": 747
+                  },
+                  "yields": {
+                    "receiver": 1
+                  }
+                }
+              }
+            ]
+          },
+          "queryType": "select",
+          "requestType": "SDK",
+          "resultCount": 10,
+          "state": "completed",
+          "text": "PROFILE SELECT * FROM movies WHERE year > '2000' AND rated = 'R' ORDER BY year DESC LIMIT 10",
+          "times": {
+            "elapsed": 1153271,
+            "parse": 56620,
+            "plan": 413836,
+            "start": "2026-08-29T19:13:30.854-05:00"
+          }
+        }
+      }
+    }
+  ],
+  "explain": {
+    "plan": {
+      "#operator": "sequence",
+      "children": [
+        {
+          "#operator": "scan",
+          "alias": "movies",
+          "collection": "movies",
+          "datasource": "default",
+          "descriptor": {
+            "diff_scan_condition": "never"
+          }
+        },
+        {
+          "#operator": "filter",
+          "condition": "(`movies`.`rated` = \"PG\")"
+        },
+        {
+          "#operator": "finalProjection"
+        }
+      ]
+    }
+  }
+}

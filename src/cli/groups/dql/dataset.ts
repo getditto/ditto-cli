@@ -124,7 +124,10 @@ export function registerDatasetCommands(dql: ReturnType<Command["command"]>, dep
     .option("-d, --data-dir <path>", "override the data directory")
     .option("--format <format>", "table | json | csv")
     .option("--max-rows <n>", "maximum rows to display", "10000")
-    .action(async (queryName: string, opts: { dataset?: string; setup: boolean; yes: boolean; dataDir?: string; format?: string; maxRows: string }) => {
+    .option("--time", "print timing after the results", false)
+    .option("--explain", "run EXPLAIN on the query and print the plan", false)
+    .option("--profile", "run PROFILE on the query and print the execution profile", false)
+    .action(async (queryName: string, opts: { dataset?: string; setup: boolean; yes: boolean; dataDir?: string; format?: string; maxRows: string; time?: boolean; explain?: boolean; profile?: boolean }) => {
       let resolved: ReturnType<typeof resolveQuery>;
       try {
         resolved = resolveQuery(queryName, opts.dataset);
@@ -161,6 +164,9 @@ export function registerDatasetCommands(dql: ReturnType<Command["command"]>, dep
           maxRows: Number.parseInt(opts.maxRows, 10),
           maxRowsExplicit: opts.maxRows !== "10000",
           suppressNoLimitWarning: true,
+          time: opts.time,
+          explain: opts.explain,
+          profile: opts.profile,
         };
         if (opts.setup && entry.preQueries?.length) {
           for (const ddl of entry.preQueries) {
