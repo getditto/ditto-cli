@@ -24,7 +24,11 @@ export async function loadDataset(
   suite: DatasetSuite,
   opts: LoadOptions,
 ): Promise<LoadResult> {
-  const batches: CollectionBatch[] = suite.generate({ docs: opts.docs, seed: opts.seed, rng: new Rng(opts.seed) });
+  const batches: CollectionBatch[] = suite.generate({
+    docs: opts.docs,
+    seed: opts.seed,
+    rng: new Rng(opts.seed),
+  });
   const collections: Record<string, number> = {};
   let totalDocs = 0;
 

@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { AmbiguousQueryError, DATASETS, getDataset, resolveQuery } from "../../src/datasets/registry.js";
+import {
+  AmbiguousQueryError,
+  DATASETS,
+  getDataset,
+  resolveQuery,
+} from "../../src/datasets/registry.js";
 import { Rng } from "../../src/datasets/rng.js";
 import type { CollectionBatch, Doc } from "../../src/datasets/types.js";
 
@@ -126,6 +131,20 @@ describe("retail generator", () => {
     expect(dates[0]! < "2023-01-01").toBe(true);
     expect(dates[dates.length - 1]! > "2025-06-01").toBe(true);
   });
+
+  it("draws Poisson once per (day, store) — order count tracks --docs closely", () => {
+    // Regression: re-drawing in the loop condition under-generated ~5%.
+    expect(orders.length).toBeGreaterThanOrEqual(990);
+    expect(orders.length).toBeLessThanOrEqual(1_001);
+  });
+
+  it("anchor order is internally consistent (item_count matches its items)", () => {
+    const anchorItems = items.filter((i) => i.order_id === "order_20250115_0001");
+    expect(anchorItems).toHaveLength(1);
+    expect(anchorItems[0]!._id).toBe("705d8eda-4606-4551-b505-5d230d38aa8a");
+    const anchor = orders.find((o) => o._id === "order_20250115_0001")!;
+    expect(anchor.item_count).toBe(anchorItems.length);
+  });
 });
 
 describe("retail-joins generator", () => {
@@ -159,9 +178,19 @@ describe("retail-joins generator", () => {
 
   it("catalog anchors exist (first-day order, 3-order customer)", () => {
     expect(orders.some((o) => o._id === "order_20221209_0001")).toBe(true);
-    const anchorOrders = orders.filter((o) => o.customer_id === "d30977d3-fa5d-4e13-9175-f637bccc4c87");
+    const anchorOrders = orders.filter(
+      (o) => o.customer_id === "d30977d3-fa5d-4e13-9175-f637bccc4c87",
+    );
     expect(anchorOrders.length).toBeGreaterThanOrEqual(3);
     expect(customers.some((c) => c._id === "d30977d3-fa5d-4e13-9175-f637bccc4c87")).toBe(true);
+  });
+
+  it("anchor orders' item_count matches actual items (no stale generated items)", () => {
+    for (const anchorId of ["order_20221209_0001", "order_20230110_0001", "order_20230615_0001"]) {
+      const anchor = orders.find((o) => o._id === anchorId)!;
+      const itsItems = items.filter((i) => i.order_id === anchorId);
+      expect(itsItems.length).toBe(anchor.item_count);
+    }
   });
 });
 
@@ -176,8 +205,8 @@ describe("pos generator", () => {
     expect(saleItems).toHaveLength(47);
   });
 
-  it("scales orders to --docs exactly, spanning the 4 business days", () => {
-    expect(orders).toHaveLength(1_000);
+  it("scales orders to --docs plus anchors, spanning the 4 business days", () => {
+    expect(orders).toHaveLength(1_002); // 1000 generated + 2 anchor orders
     const days = new Set(orders.map((o) => o.businessDay));
     expect(days).toEqual(new Set(["2026-07-09", "2026-07-10", "2026-07-11", "2026-07-12"]));
   });

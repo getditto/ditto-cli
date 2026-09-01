@@ -8,7 +8,7 @@ describe("loadIdentity (dev build)", () => {
       OFFLINE_TOKEN: "tok-1",
       EXPIRE_ON: "2027-01-01",
     } as NodeJS.ProcessEnv);
-    expect(id).toEqual({ appId: "app-1", token: "tok-1", expiresOn: "2027-01-01" });
+    expect(id).toEqual({ appId: "app-1", token: "tok-1", expiresOn: "2027-01-01", source: "env" });
   });
 
   it("falls back to DITTO_APP_ID + DQL_OFFLINE_LICENSE aliases", () => {

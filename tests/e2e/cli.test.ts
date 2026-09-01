@@ -4,15 +4,15 @@ import { describe, expect, it } from "vitest";
 import { hasDevCredentials, NO_CREDENTIALS, rmrf, tmpDataDir } from "../helpers/credentials.js";
 
 const ROOT = path.resolve(import.meta.dirname, "../..");
-const ENV_FILE = path.join(ROOT, ".env");
 
 function cli(args: string[], opts: { cwd?: string; input?: string } = {}) {
   // Run the CLI exactly like a user would in dev: node + tsx loader + .env.
-  return execa(
-    process.execPath,
-    ["--import", "tsx", `--env-file=${ENV_FILE}`, "src/cli/index.ts", ...args],
-    { cwd: opts.cwd ?? ROOT, reject: false, all: true, input: opts.input },
-  );
+  return execa(process.execPath, ["--import", "tsx", "src/cli/index.ts", ...args], {
+    cwd: opts.cwd ?? ROOT,
+    reject: false,
+    all: true,
+    input: opts.input,
+  });
 }
 
 interface RunResult {
@@ -24,12 +24,17 @@ interface RunResult {
 
 describe.skipIf(!hasDevCredentials)(`e2e: ditto dql (${NO_CREDENTIALS})`, () => {
   it("doctor passes all checks (exit 0)", async () => {
-    const r = (await cli(["dql", "doctor"])) as unknown as RunResult;
-    expect(r.exitCode).toBe(0);
-    expect(r.stdout).toContain("platform");
-    expect(r.stdout).toContain("data directory");
-    expect(r.stdout).toContain("token");
-    expect(r.stdout).not.toContain("✗");
+    const dir = tmpDataDir("ditto-e2e-doctor-"); // never touch the default store in tests
+    try {
+      const r = (await cli(["dql", "doctor", "-d", dir])) as unknown as RunResult;
+      expect(r.exitCode).toBe(0);
+      expect(r.stdout).toContain("platform");
+      expect(r.stdout).toContain("data directory");
+      expect(r.stdout).toContain("token");
+      expect(r.stdout).not.toContain("✗");
+    } finally {
+      rmrf(dir);
+    }
   });
 
   it("inserts then queries documents end-to-end", async () => {
@@ -42,7 +47,7 @@ describe.skipIf(!hasDevCredentials)(`e2e: ditto dql (${NO_CREDENTIALS})`, () => 
         dir,
       ])) as unknown as RunResult;
       expect(ins.exitCode).toBe(0);
-      expect(ins.stdout.trim()).toBe("OK");
+      expect(ins.stderr).toContain("OK");
 
       const sel = (await cli([
         "dql",
@@ -151,13 +156,26 @@ describe.skipIf(!hasDevCredentials)(`e2e: ditto dql (${NO_CREDENTIALS})`, () => 
   it("--profile renders the profile view end-to-end", async () => {
     const dir = tmpDataDir("ditto-e2e-");
     try {
-      await cli(["dql", "INSERT INTO movies DOCUMENTS ({'_id':'e1','title':'Alien','rated':'R'}) ON ID CONFLICT DO UPDATE", "-d", dir]);
-      const r = (await cli(["dql", "SELECT * FROM movies WHERE rated = 'R'", "-d", dir, "--profile", "--time"])) as unknown as RunResult;
+      await cli([
+        "dql",
+        "INSERT INTO movies DOCUMENTS ({'_id':'e1','title':'Alien','rated':'R'}) ON ID CONFLICT DO UPDATE",
+        "-d",
+        dir,
+      ]);
+      const r = (await cli([
+        "dql",
+        "SELECT * FROM movies WHERE rated = 'R'",
+        "-d",
+        dir,
+        "--profile",
+        "--time",
+      ])) as unknown as RunResult;
       expect(r.exitCode).toBe(0);
-      expect(r.stdout).toContain("Execution Profile");
-      expect(r.stdout).toContain("Execution plan");
-      expect(r.stdout).toContain("scan");
+      expect(r.stderr).toContain("Execution Profile");
+      expect(r.stderr).toContain("Execution plan");
+      expect(r.stderr).toContain("scan");
       expect(r.stderr).toMatch(/Time: [\d.]+ ms/);
+      expect(JSON.parse(r.stdout)).toEqual([{ _id: "e1", rated: "R", title: "Alien" }]);
     } finally {
       rmrf(dir);
     }
@@ -166,13 +184,60 @@ describe.skipIf(!hasDevCredentials)(`e2e: ditto dql (${NO_CREDENTIALS})`, () => 
   it("--explain prints the plan; non-SELECT with --profile prints the note", async () => {
     const dir = tmpDataDir("ditto-e2e-");
     try {
-      await cli(["dql", "INSERT INTO movies DOCUMENTS ({'_id':'e1','title':'Alien'}) ON ID CONFLICT DO UPDATE", "-d", dir]);
-      const ex = (await cli(["dql", "SELECT * FROM movies", "-d", dir, "--explain"])) as unknown as RunResult;
+      await cli([
+        "dql",
+        "INSERT INTO movies DOCUMENTS ({'_id':'e1','title':'Alien'}) ON ID CONFLICT DO UPDATE",
+        "-d",
+        dir,
+      ]);
+      const ex = (await cli([
+        "dql",
+        "SELECT * FROM movies",
+        "-d",
+        dir,
+        "--explain",
+      ])) as unknown as RunResult;
       expect(ex.exitCode).toBe(0);
-      expect(ex.stdout).toContain("Query plan");
+      expect(ex.stderr).toContain("Query plan");
 
-      const nonSelect = (await cli(["dql", "INSERT INTO movies DOCUMENTS ({'_id':'e2','title':'B'}) ON ID CONFLICT DO UPDATE", "-d", dir, "--profile"])) as unknown as RunResult;
+      const nonSelect = (await cli([
+        "dql",
+        "INSERT INTO movies DOCUMENTS ({'_id':'e2','title':'B'}) ON ID CONFLICT DO UPDATE",
+        "-d",
+        dir,
+        "--profile",
+      ])) as unknown as RunResult;
       expect(nonSelect.stderr).toContain("only SELECT statements are profilable");
+    } finally {
+      rmrf(dir);
+    }
+  });
+
+  it("--advise renders the advice card and --apply -y creates the index", async () => {
+    const dir = tmpDataDir("ditto-e2e-");
+    try {
+      await cli([
+        "dql",
+        "INSERT INTO movies DOCUMENTS ({'_id':'e1','title':'Alien','rated':'R','year':1979}) ON ID CONFLICT DO UPDATE",
+        "-d",
+        dir,
+      ]);
+      const r = (await cli([
+        "dql",
+        "SELECT * FROM movies WHERE rated = 'PG' AND year > '2000' ORDER BY year",
+        "-d",
+        dir,
+        "--advise",
+        "--apply",
+        "-y",
+      ])) as unknown as RunResult;
+      expect(r.exitCode).toBe(0);
+      // The advice card renders to stderr when piped (stdout purity).
+      expect(r.stderr).toContain("Index advice");
+      expect(r.stderr).toContain("CREATE INDEX");
+      expect(r.stderr).toContain("✓ created");
+      const idx = (await cli(["dql", "indexes", "movies", "-d", dir])) as unknown as RunResult;
+      expect(idx.stdout).toContain("adv_movies");
     } finally {
       rmrf(dir);
     }

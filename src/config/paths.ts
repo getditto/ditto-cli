@@ -15,14 +15,35 @@ export function defaultDataDir(): string {
 
 /** Config directory (update-check cache, one-time-warning flags). `DITTO_CONFIG_DIR` overrides — used by tests, handy for portable setups. */
 export function configDir(): string {
-  return process.env.DITTO_CONFIG_DIR ?? paths().config;
+  const override = process.env.DITTO_CONFIG_DIR;
+  return override?.trim() ? override : paths().config;
+}
+
+/** Expand a leading `~` to the home directory. */
+export function expandTilde(p: string): string {
+  return p.replace(/^~(?=$|[\\/])/, os.homedir());
+}
+
+/** Values that are never a real data dir (commander artifacts / typo guards): `-d --`, `-d -`, `-d=--`. */
+export function isBogusDataDir(v?: string): boolean {
+  if (v === undefined) return false;
+  const cleaned = v.replace(/^=/, "").trim();
+  return cleaned === "--" || cleaned === "-";
 }
 
 /**
  * Data directory resolution precedence:
  *   --data-dir flag > DITTO_DATA_DIR env var > OS default
+ * Empty strings fall through (commander accepts `-d ""`; cwd is never intended).
  */
 export function resolveDataDir(flag?: string, env: NodeJS.ProcessEnv = process.env): string {
-  const dir = flag ?? env.DITTO_DATA_DIR ?? defaultDataDir();
-  return path.resolve(dir.replace(/^~(?=$|[\\/])/, os.homedir()));
+  // Commander's short-option `=` form keeps the "=" (e.g. `-d=/tmp/x` → "=/tmp/x") — strip it.
+  const clean = (v?: string) => v?.replace(/^=/, "").trim();
+  const chosen = clean(flag)
+    ? clean(flag)
+    : clean(env.DITTO_DATA_DIR)
+      ? clean(env.DITTO_DATA_DIR)
+      : undefined;
+  const dir = chosen ?? defaultDataDir();
+  return path.resolve(expandTilde(dir));
 }

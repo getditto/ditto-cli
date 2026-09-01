@@ -1,5 +1,6 @@
 import catalog from "./benchmarks.json" with { type: "json" };
 import type { CatalogQuery, DatasetSuite, Doc, GenerateOptions, RngLike } from "../../src/datasets/types.js";
+import { upsertAnchors } from "../../src/datasets/util.js";
 
 /**
  * pos — point-of-sale suite, faithful port of tools/gen-pos-data.py:
@@ -321,13 +322,17 @@ function generate({ docs, rng }: GenerateOptions) {
   buildFor(SINGLE_STORE, atSingle);
   LOCATIONS.slice(1).forEach(([locId], i) => buildFor(locId, elsewhere[i]!));
 
-  // Anchor the two catalog-referenced order ids (location 00001, day 1).
-  for (let i = 0; i < Math.min(ANCHOR_IDS.length, orders.length); i++) {
-    const order = orders[i]!;
-    (order._id as Doc).id = ANCHOR_IDS[i];
-    (order._id as Doc).locationId = SINGLE_STORE;
-    order.businessDay = BUSINESS_DAYS[0];
-  }
+  // Anchor the two catalog-referenced order ids as full, internally
+  // consistent docs (location 00001, business day 1) — patch-or-append so
+  // tiny --docs values can't silently drop the second anchor.
+  upsertAnchors(
+    orders,
+    ANCHOR_IDS.map((id) => {
+      const anchor = buildOrder(rng, SINGLE_STORE, BUSINESS_DAYS[0]!);
+      (anchor._id as Doc).id = id;
+      return anchor;
+    }),
+  );
 
   return [
     { collection: "locations", docs: locations },
@@ -346,13 +351,6 @@ const suite: DatasetSuite = {
     { name: "locations", shape: "_id (00001–00007), name (7 fixed)" },
     { name: "sale_items", shape: "_id {id,locationId}, name, imageName, price{amount,currency}, modifierGroups{…} (47 fixed)" },
     { name: "pos_orders", shape: "_id {id,locationId}, createdAt, businessDay, status, paymentStatus, orderType, totals{subtotal,modifierTotal,tax,total} (money objects, cents), itemCount, modifierCount, cart{…}, payments{…}, status_log{…}" },
-  ],
-  setupStatements: [
-    "CREATE INDEX pos_loc ON pos_orders (_id.locationId)",
-    "CREATE INDEX pos_loc_created ON pos_orders (_id.locationId, createdAt)",
-    "CREATE INDEX pos_loc_status ON pos_orders (_id.locationId, status)",
-    "CREATE INDEX pos_bday ON pos_orders (businessDay)",
-    "CREATE INDEX pos_sale_loc ON sale_items (_id.locationId)",
   ],
   catalog: catalog as unknown as Record<string, CatalogQuery>,
   generate,

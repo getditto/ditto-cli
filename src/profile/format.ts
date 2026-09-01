@@ -7,7 +7,11 @@ export function formatNs(ns?: number): string {
 }
 
 /** "12.3%" of total, or null when below the threshold (Edge Studio rule: 0.05). */
-export function percentOfTotal(ns: number | undefined, total: number, threshold = 0.05): string | null {
+export function percentOfTotal(
+  ns: number | undefined,
+  total: number,
+  threshold = 0.05,
+): string | null {
   if (ns === undefined || total <= 0) return null;
   const ratio = ns / total;
   if (ratio < threshold) return null;

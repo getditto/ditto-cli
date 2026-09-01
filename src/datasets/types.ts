@@ -60,10 +60,10 @@ export interface DatasetSuite {
   scalingDimension: string;
   defaultDocs: number;
   collections: CollectionSpec[];
-  /** Index DDL derived from the catalog's preQueries (for `dataset show`). */
-  setupStatements: string[];
   /** Vendored query catalog (benchmarks.json), keyed by query name. */
   catalog: Record<string, CatalogQuery>;
+  /** Known upstream issues per catalog query (e.g. SDK hangs) — shown by `dataset show`, warned by `dataset run`. */
+  knownIssues?: Record<string, string>;
   /** Generate documents in dependency order (e.g. stores before orders). */
   generate(opts: GenerateOptions): CollectionBatch[];
 }

@@ -8,6 +8,27 @@ export class ParamError extends Error {
   }
 }
 
+/** Parse a CLI integer flag; usage error (exit 2) on garbage or out-of-range. */
+export function parsePositiveInt(
+  raw: string | undefined,
+  flag: string,
+  fallback: number,
+  opts?: { min?: number; max?: number },
+): number {
+  if (raw === undefined) return fallback;
+  const min = opts?.min ?? 1;
+  const n = Number.parseInt(raw, 10);
+  if (!Number.isFinite(n) || n < min || String(n) !== raw.trim()) {
+    throw new ParamError(`${flag} must be an integer ≥ ${min}, got "${raw}"`);
+  }
+  if (opts?.max !== undefined && n > opts.max) {
+    throw new ParamError(
+      `${flag} must be at most ${opts.max.toLocaleString()}, got ${n.toLocaleString()}`,
+    );
+  }
+  return n;
+}
+
 /**
  * Build SDK query arguments from CLI input:
  *  - `--args '<json-object>'` (base set)
@@ -36,10 +57,16 @@ export function parseParams(
 
   for (const pair of pairs ?? []) {
     const eq = pair.indexOf("=");
-    if (eq === -1 || eq === 0) {
+    if (eq === -1) {
       throw new ParamError(`--param must be name=value, got: "${pair}"`);
     }
     const name = pair.slice(0, eq).trim();
+    if (name === "") {
+      throw new ParamError(`--param must be name=value, got: "${pair}" (empty name)`);
+    }
+    if (name === "__proto__" || name === "constructor" || name === "prototype") {
+      throw new ParamError(`--param name "${name}" is not allowed (prototype pollution guard)`);
+    }
     const raw = pair.slice(eq + 1);
     let value: unknown;
     try {
@@ -48,7 +75,12 @@ export function parseParams(
       value = raw; // bare string fallback
     }
     out = out ?? {};
-    out[name] = value;
+    Object.defineProperty(out, name, {
+      value,
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    });
   }
 
   return out as DQLQueryArguments | undefined;

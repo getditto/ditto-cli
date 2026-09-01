@@ -4,10 +4,22 @@ import { renderTable } from "./table.js";
 
 export type OutputFormat = "table" | "json" | "csv";
 
-/** Resolve the effective output format: explicit flag, else TTY=table / piped=json. */
-export function resolveFormat(flag?: string, isTTY: boolean = process.stdout.isTTY): OutputFormat {
+export class FormatError extends Error {
+  readonly exitCode = 2;
+  constructor(flag: string) {
+    super(`--format must be one of table, json, csv — got "${flag}"`);
+    this.name = "FormatError";
+  }
+}
+
+/** Validate an explicit --format flag (usage error) or fall back to TTY/piped default. */
+export function resolveFormat(
+  flag: string | undefined,
+  isTTY: boolean = process.stdout.isTTY,
+): OutputFormat {
+  if (flag === undefined) return isTTY ? "table" : "json";
   if (flag === "table" || flag === "json" || flag === "csv") return flag;
-  return isTTY ? "table" : "json";
+  throw new FormatError(flag);
 }
 
 export function renderRows(rows: Record<string, unknown>[], format: OutputFormat): string {
@@ -21,9 +33,9 @@ export function renderRows(rows: Record<string, unknown>[], format: OutputFormat
   }
 }
 
-/** Format for a `-o` file: explicit format wins, else infer from extension. */
-export function formatForOutFile(outPath: string, explicit?: OutputFormat): OutputFormat {
-  if (explicit) return explicit;
+/** Format for a `-o` file: validated explicit format wins, else infer from extension. */
+export function formatForOutFile(outPath: string, explicit?: string): OutputFormat {
+  if (explicit) return resolveFormat(explicit);
   const ext = path.extname(outPath).toLowerCase();
   if (ext === ".json") return "json";
   if (ext === ".csv") return "csv";

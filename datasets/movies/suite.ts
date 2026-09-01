@@ -125,9 +125,11 @@ function generate({ docs, rng }: GenerateOptions) {
 
   // Invariant repair (cheap, deterministic): the catalog needs ≥1 '2001' doc
   // (exact_match_id) and ≥1 "Star" title (like_pattern / text_search_title).
+  // `released` must stay consistent with `_id.year` for range queries.
   if (docs > 1 && !have2001) {
-    const m = movies[1]! as { _id: { year: string } };
+    const m = movies[1]! as { _id: { year: string }; released: string };
     m._id.year = "2001";
+    m.released = `2001${m.released.slice(4)}`;
   }
   if (docs > 2 && !haveStar) {
     const m = movies[2]! as { _id: { title: string } };
@@ -148,13 +150,6 @@ const suite: DatasetSuite = {
       name: "movies",
       shape: "_id {id,title,year(string),type}, plot, fullplot, genres[], cast[], directors[], writers[], rated, runtime, released, countries[], languages[], awards{wins,nominations,text}, imdb{rating,votes,id}, tomatoes{viewer{…}}, num_mflix_comments, lastupdated",
     },
-  ],
-  setupStatements: [
-    "CREATE INDEX movies_rated ON movies (rated)",
-    "CREATE INDEX movies_year ON movies (_id.year)",
-    "CREATE INDEX movies_rated_runtime ON movies (rated, runtime)",
-    "CREATE INDEX movies_plot_text ON movies (plot)",
-    "CREATE INDEX movies_awards_wins ON movies (awards.wins)",
   ],
   catalog: catalog as unknown as Record<string, CatalogQuery>,
   generate,

@@ -3,6 +3,14 @@
 Companion to the canonical spec: [`SDKS-4855-dql-cli-tool.md`](./SDKS-4855-dql-cli-tool.md).
 Branch: `aaronlabeau/sdks-4855-dql-cli-tool`. This file is the working checklist; tick boxes as work lands.
 
+## Status summary
+
+- **M0–M5 complete** (scaffold, core query, interactive modes, datasets, diagnostics, advise).
+- **Adversarial review: 17 rounds, ~161 issues found and fixed, CONVERGED** (final round returned "no issues found"). Every fix carries regression tests; every round verified fixes live (incl. pty-level REPL checks).
+- Two upstream SDK 5.1.0 bugs found and reported on the Linear ticket (NO_COLOR native panic; retail-joins query hang) — both mitigated CLI-side, see Known issues.
+- Current: **392/392 tests green · coverage 89.3/86.7/90.6/89.9 (85% hard gate) · lint + typecheck clean.**
+- Remaining: M6 (skills), M7 (self-update), M8 (distribution + token stamping).
+
 ## Sequencing approach
 
 **Walking skeleton first, risk-first ordering.** Get `ditto dql "SELECT …" → table output` working end-to-end against a real Ditto store as early as possible (M1), then layer features in milestone order. The three riskiest unknowns are burned down before or during M1:
@@ -102,15 +110,16 @@ Branch: `aaronlabeau/sdks-4855-dql-cli-tool`. This file is the working checklist
 **Tests:** ✅ unit — parser vs. real fixture (parse fields, bare-form marker rule, no `text` false-positive, stats/attributes, reserved-key exclusion), formatNs boundaries, percentOfTotal, hotspots, keyAttribute, renderProfile snapshot-ish assertions, renderExplain tree + fallback, runStatement gating matrix (prefix/no-double-prefix/non-SELECT note/ADVISE never side-tripped, --time footer with server times); ✅ integration — live `--profile` envelope parsed with real plan tree, `--explain` side-trip, `--time` server merge; ✅ e2e — `--profile` view + `--time` footer, non-SELECT note. **242/242 green; coverage 92.1/87.1/93.6/92.7 — gate holds.**
 **Exit:** ✅ `ditto dql --profile "SELECT …"` renders the full profile view (verified live against the real store).
 
-## M5 — Advise
+## M5 — Advise ✅ DONE
 
-- [ ] `src/query/advise.ts` — wrap in `ADVISE <stmt>`; forgiving extraction (scan rows, merge `advice.suggestedIndexes[]`, drop partials missing `collection`/`statement`); empty → `outcome` text
-- [ ] `src/render/advise.ts` — "Index advice" section: analyzed statement; per suggestion `collection — reason` + CREATE INDEX in code block
-- [ ] `--apply` flow: `@inquirer/prompts` confirm per statement (or `-y`), execute via raw path, per-statement `created | failed` report
-- [ ] Gating: `--advise` + `--profile`/`--explain` together → advise wins, warn once
+- [x] Live probe: ADVISE on SDK 5.1.0 returns `[{ advice: { statement, suggestedIndexes: [{ collection, reason, statement }], outcome? } }]` — CREATE INDEX statements use `default:\`collection\`` qualification
+- [x] `src/query/advise.ts` — forgiving extraction (scan rows, merge `advice.suggestedIndexes[]`, drop partials missing `collection`/`statement`)
+- [x] `src/render/advise.ts` — "Index advice" card: analyzed statement; per suggestion `collection — reason` + CREATE INDEX; empty state with `outcome` text; `✓ created`/`✗ failed` badges post-apply
+- [x] `--advise` / `--apply` / `-y` on `dql exec` (and available on `dataset run` base opts): apply confirms via @inquirer/prompts on TTY (stderr), `-y` skips, non-TTY without `-y` skips with a note; per-statement created/failed
+- [x] Gating (unit-tested): `--advise` wins over `--profile`/`--explain` with a one-line note; user-typed `ADVISE …` renders the card directly (no double-wrap); non-SELECT + `--advise` → plain run with note
 
-**Tests:** unit — extraction fixtures (suggestions, no-keys outcome, partial drops); integration — live `ADVISE` on unindexed query, then `--apply -y`, then `ditto dql indexes` shows it; e2e — advice output format.
-**Exit:** `ditto dql --advise "SELECT …"` prints advice; `--apply` creates the index.
+**Tests:** ✅ unit — extraction (standard/empty-outcome/multi-row-merge/partials/none), renderer (suggestions/empty/badges), runStatement gating (wrap/precedence/non-SELECT/user-typed, apply confirm/decline/-y/failure) (12); ✅ integration — live ADVISE→apply→`system:indexes` round-trip; ✅ e2e — advice card + created badge. **260/260 green; coverage 91.9/87.5/93.7/92.6 — gate holds.**
+**Exit:** ✅ `ditto dql --advise "SELECT …"` prints advice; `--apply` creates the index (verified live: `adv_movies_rated_year` visible in `system:indexes`).
 
 ## M6 — Skills (`ditto skills`)
 
@@ -168,6 +177,17 @@ Branch: `aaronlabeau/sdks-4855-dql-cli-tool`. This file is the working checklist
 | 4 | `getditto/homebrew-tap` repo | M8 | maintainer | open |
 | 5 | `@dittolive` npm scope publish rights | M8 | maintainer | open |
 | 6 | `getditto/dql-metrics-benchmark` suite drift | M3 (manual sync) | maintainer | accepted — vendored copy |
+| 7 | **SDK 5.1.0: `joins__left__products_inventory_stock_value` hangs** (nlJoin over intersectScan when `inv_store_flat` + `inv_product_flat` indexes exist; `coalesce(i.stock_level,0)` projection) — found by adversarial review R12 | none (CLI marks it known-issue in `dataset show`/`run`) | SDK team | **open — report upstream** |
+| 8 | **SDK 5.1.0: `NO_COLOR` env var panics the native tracing layer** (abort, exit 134) — CLI scrubs `NO_COLOR` before the SDK loads (`src/ditto/sanitize-env.ts`) | none (CLI mitigates) | SDK team | **open — report upstream** |
+
+## Known issues
+
+- `retail-joins` catalog query `joins__left__products_inventory_stock_value` hangs SDK 5.1.0 when the `inv_store_flat` index exists (see dependency 7). The CLI marks it as a known issue in `dataset show` and warns on `dataset run`. Workaround: run without `--setup`, or append `LIMIT`.
+- CSV output does not escape formula-injection-leading characters (`=`, `+`, `@`) — accepted for a dev tool; don't feed CSV into Excel unsanitized.
+- A killed `dataset run` of a write-category entry (Ctrl-C between fixture INSERT and cleanup EVICT) leaves the fixture doc; the vendored catalog's fixture INSERTs lack `ON ID CONFLICT`, so the next run's INSERT fails once with a duplicate-key error, then self-heals (cleanup EVICTs it). Catalogs are vendored verbatim — accepted.
+- SDK 5.1.0 native fragility family (reported upstream): `NO_COLOR` abort (CLI mitigates by scrubbing) and a dead stderr pipe (`2> >(exec false)`) aborting at SDK init (exit 134) — not mitigated; the init-time 7-line burst usually fits pipe buffers, so `2>&1 | head` is unaffected.
+- SDK 5.1.0: `SELECT * FROM system:collections` returns rows only on the FIRST `store.execute` of a session (subsequent calls return 0 items; a fresh session on the same dir works) — reproduced against the raw SDK, reported upstream. Affects `dql collections` twice in one REPL/batch. Not CLI-fixable.
+- `dataset run`'s fixture INSERTs are vendored verbatim; killing mid-run can leave one cryptic duplicate-key failure on the next run, then self-heals.
 
 ## Spike findings log
 

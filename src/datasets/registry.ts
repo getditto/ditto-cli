@@ -1,7 +1,7 @@
 import movies from "../../datasets/movies/suite.js";
 import pos from "../../datasets/pos/suite.js";
-import retailJoins from "../../datasets/retail-joins/suite.js";
 import retail from "../../datasets/retail/suite.js";
+import retailJoins from "../../datasets/retail-joins/suite.js";
 import { Rng } from "./rng.js";
 import type { CatalogQuery, DatasetSuite } from "./types.js";
 
@@ -30,7 +30,9 @@ export class AmbiguousQueryError extends Error {
     public readonly queryName: string,
     public readonly matches: string[],
   ) {
-    super(`Query "${queryName}" exists in multiple datasets: ${matches.join(", ")}. Pass --dataset to disambiguate.`);
+    super(
+      `Query "${queryName}" exists in multiple datasets: ${matches.join(", ")}. Pass --dataset to disambiguate.`,
+    );
     this.name = "AmbiguousQueryError";
   }
 }
@@ -40,12 +42,16 @@ export function resolveQuery(queryName: string, datasetName?: string): ResolvedQ
   const suites = datasetName ? DATASETS.filter((d) => d.name === datasetName) : DATASETS;
   const matches: ResolvedQuery[] = [];
   for (const dataset of suites) {
-    const entry = getCatalog(dataset)[queryName];
+    const catalog = getCatalog(dataset);
+    const entry = Object.hasOwn(catalog, queryName) ? catalog[queryName] : undefined;
     if (entry) matches.push({ dataset, name: queryName, entry });
   }
   if (matches.length === 0) return undefined;
   if (matches.length > 1) {
-    throw new AmbiguousQueryError(queryName, matches.map((m) => m.dataset.name));
+    throw new AmbiguousQueryError(
+      queryName,
+      matches.map((m) => m.dataset.name),
+    );
   }
   return matches[0]!;
 }

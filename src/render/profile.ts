@@ -12,7 +12,9 @@ export function renderProfile(profile: QueryProfile, originalQuery: string): str
   const lines: string[] = [];
 
   lines.push(chalk.bold("Execution Profile"));
-  lines.push(chalk.dim(`captured ${profile.times.startIso ?? "unknown"} · profile ${profile.id ?? "n/a"}`));
+  lines.push(
+    chalk.dim(`captured ${profile.times.startIso ?? "unknown"} · profile ${profile.id ?? "n/a"}`),
+  );
   lines.push(chalk.cyan(`  ${originalQuery}`));
   lines.push("");
 
@@ -32,7 +34,7 @@ export function renderProfile(profile: QueryProfile, originalQuery: string): str
     lines.push(chalk.bold("Execution plan"));
     const annotated = annotatePlan(profile.plan);
     const totalExec = annotated.reduce((s, n) => s + n.execNs, 0);
-    for (const { node, depth, execNs, fraction, isHotspot } of annotated) {
+    for (const { node, depth, execNs, isHotspot } of annotated) {
       const indent = "  ".repeat(depth);
       const branch = depth === 0 ? "" : "└─ ";
       const name = chalk.bold(node.name);
@@ -54,7 +56,9 @@ export function renderProfile(profile: QueryProfile, originalQuery: string): str
 
   lines.push("");
   lines.push(
-    chalk.dim("legend: exec = CPU inside operator · recv = waiting upstream · send = pushing downstream · in/out = documents"),
+    chalk.dim(
+      "legend: exec = CPU inside operator · recv = waiting upstream · send = pushing downstream · in/out = documents",
+    ),
   );
   return lines.join("\n");
 }

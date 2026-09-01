@@ -38,9 +38,16 @@ export interface QueryProfile {
 }
 
 /** Envelope marker keys — deliberately NOT `text` (user docs may carry it). */
-const MARKERS = ["times", "queryType", "requestType", "featureFlags", "state", "resultCount"];
+const MARKERS = ["queryType", "requestType", "featureFlags", "state", "resultCount"] as const;
 
+/**
+ * Bare-form detection (the SDK wraps in `~request_profile` in practice, but a
+ * bare dict is accepted). To avoid eating user rows, the bare form requires a
+ * `times` object AND at least one other marker (Edge Studio uses any marker;
+ * that would swallow a user doc carrying only `state`).
+ */
 function isProfileDict(v: Record<string, unknown>): boolean {
+  if (typeof v.times !== "object" || v.times === null) return false;
   return MARKERS.some((k) => k in v);
 }
 
@@ -93,7 +100,10 @@ function parseEnvelope(env: Record<string, unknown>): QueryProfile {
       planNs: ns(times.plan),
       startIso: typeof times.start === "string" ? times.start : undefined,
     },
-    plan: env.plan && typeof env.plan === "object" ? parsePlanNode(env.plan as Record<string, unknown>) : undefined,
+    plan:
+      env.plan && typeof env.plan === "object"
+        ? parsePlanNode(env.plan as Record<string, unknown>)
+        : undefined,
   };
 }
 
@@ -101,7 +111,9 @@ function parsePlanNode(node: Record<string, unknown>): PlanNode {
   const statsRaw = (node["#stats"] ?? {}) as Record<string, unknown>;
   const phaseRaw = (statsRaw.phaseTimes ?? {}) as Record<string, unknown>;
   const children = Array.isArray(node.children)
-    ? (node.children as unknown[]).map((c) => parsePlanNode(c as Record<string, unknown>))
+    ? (node.children as unknown[])
+        .filter((c): c is Record<string, unknown> => typeof c === "object" && c !== null)
+        .map((c) => parsePlanNode(c))
     : [];
 
   const stats =

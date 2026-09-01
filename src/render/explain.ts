@@ -1,4 +1,5 @@
 import chalk from "chalk";
+import { stripControlChars } from "./sanitize.js";
 
 /**
  * EXPLAIN output is a plan JSON document (first item carries a `plan` key on
@@ -33,9 +34,14 @@ function renderNode(node: OpNode, depth: number, lines: string[]): void {
   const name = (node["#operator"] ?? node.operator ?? "unknown") as string;
   const extras = Object.entries(node)
     .filter(([k]) => !["operator", "#operator", "children"].includes(k))
-    .map(([k, v]) => `${k}=${typeof v === "string" ? v : JSON.stringify(v)}`)
+    .map(
+      ([k, v]) =>
+        `${k}=${stripControlChars(typeof v === "string" ? v : (JSON.stringify(v) ?? "undefined"))}`,
+    )
     .join(" ");
-  lines.push(`${"  ".repeat(depth)}${depth === 0 ? "" : "└─ "}${chalk.bold(name)}${extras ? ` ${chalk.dim(extras)}` : ""}`);
+  lines.push(
+    `${"  ".repeat(depth)}${depth === 0 ? "" : "└─ "}${chalk.bold(name)}${extras ? ` ${chalk.dim(extras)}` : ""}`,
+  );
   for (const child of node.children ?? []) {
     renderNode(child, depth + 1, lines);
   }

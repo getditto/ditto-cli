@@ -146,9 +146,14 @@ function generate({ docs, rng, seed }: GenerateOptions) {
 
   const inventory = generateInventory(stores, products, rng, 0.08); // LEFT JOIN holes
   const { orders, items } = generateOrders(stores, products, customers, docs, rng, seed);
+  // Anchor orders that collide with generated ids must own their items:
+  // drop the generated items for collided order ids first.
+  const anchorOrderIds = new Set(anchors.orders.map((o) => o._id as string));
+  const collidedIds = new Set(orders.filter((o) => anchorOrderIds.has(o._id as string)).map((o) => o._id as string));
+  const keptItems = collidedIds.size > 0 ? items.filter((i) => !collidedIds.has(i.order_id as string)) : items;
   upsertAnchors(customers, [anchors.customer]);
   upsertAnchors(orders, anchors.orders);
-  upsertAnchors(items, anchors.items);
+  upsertAnchors(keptItems, anchors.items);
 
   return [
     { collection: "stores", docs: stores },
@@ -159,7 +164,7 @@ function generate({ docs, rng, seed }: GenerateOptions) {
     { collection: "inventory", docs: inventory },
     // Normalized: denormalized fields stripped to force JOINs.
     { collection: "orders", docs: orders.map((o) => strip(o, ["customer_name", "customer_email", "store_name"])) },
-    { collection: "order_items", docs: items.map((i) => strip(i, ["store_id", "sku", "product_name"])) },
+    { collection: "order_items", docs: keptItems.map((i) => strip(i, ["store_id", "sku", "product_name"])) },
   ];
 }
 
@@ -179,18 +184,11 @@ const suite: DatasetSuite = {
     { name: "orders", shape: "retail orders minus customer_name/customer_email/store_name" },
     { name: "order_items", shape: "retail order_items minus store_id/sku/product_name" },
   ],
-  setupStatements: [
-    "CREATE INDEX orders_store ON orders (store_id, deleted)",
-    "CREATE INDEX products_sku ON products (sku)",
-    "CREATE INDEX inv_store ON inventory (_id.store_id)",
-    "CREATE INDEX items_order ON order_items (order_id)",
-    "CREATE INDEX items_product ON order_items (product_id)",
-    "CREATE INDEX orders_customer ON orders (customer_id, deleted)",
-    "CREATE INDEX products_category ON products (category_id)",
-    "CREATE INDEX products_type ON products (type_id)",
-    "CREATE INDEX customers_primary_store_deleted ON customers (primary_store_id, deleted)",
-  ],
   catalog: catalog as unknown as Record<string, CatalogQuery>,
+  knownIssues: {
+    joins__left__products_inventory_stock_value:
+      "SDK 5.1.0: hangs (nlJoin over intersectScan) when the inv_store_flat index exists — run without --setup, or add LIMIT. Tracked upstream; see plans/SDKS-4855-implementation-plan.md.",
+  },
   generate,
 };
 

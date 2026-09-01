@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { Rng } from "../../src/datasets/rng.js";
 import { deterministicUuid } from "../../src/datasets/registry.js";
+import { Rng } from "../../src/datasets/rng.js";
 
 describe("Rng", () => {
   it("is deterministic for the same seed", () => {
@@ -30,7 +30,14 @@ describe("Rng", () => {
   it("weighted respects zero weights and returns valid labels", () => {
     const rng = new Rng(11);
     const picks = new Set<string>();
-    for (let i = 0; i < 200; i++) picks.add(rng.weighted([["a", 0], ["b", 1], ["c", 5]]));
+    for (let i = 0; i < 200; i++)
+      picks.add(
+        rng.weighted([
+          ["a", 0],
+          ["b", 1],
+          ["c", 5],
+        ]),
+      );
     expect(picks.has("a")).toBe(false);
     expect(picks).toEqual(new Set(["b", "c"]));
   });
@@ -38,7 +45,9 @@ describe("Rng", () => {
   it("uuid produces RFC-4122 v4 shape", () => {
     const rng = new Rng(5);
     for (let i = 0; i < 50; i++) {
-      expect(rng.uuid()).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+      expect(rng.uuid()).toMatch(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+      );
     }
   });
 

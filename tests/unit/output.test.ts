@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { formatForOutFile, renderRows, resolveFormat } from "../../src/render/output.js";
+import {
+  FormatError,
+  formatForOutFile,
+  renderRows,
+  resolveFormat,
+} from "../../src/render/output.js";
 
 describe("resolveFormat", () => {
   it("honors an explicit valid flag", () => {
@@ -12,9 +17,9 @@ describe("resolveFormat", () => {
     expect(resolveFormat(undefined, false)).toBe("json");
   });
 
-  it("ignores unknown flag values", () => {
-    expect(resolveFormat("yaml", true)).toBe("table");
-    expect(resolveFormat("yaml", false)).toBe("json");
+  it("rejects unknown flag values (usage error)", () => {
+    expect(() => resolveFormat("yaml", true)).toThrow(FormatError);
+    expect(() => resolveFormat("yaml", false)).toThrow(FormatError);
   });
 });
 
@@ -26,8 +31,9 @@ describe("formatForOutFile", () => {
     expect(formatForOutFile("noext")).toBe("table");
   });
 
-  it("explicit format wins over extension", () => {
+  it("explicit format wins over extension; bogus explicit throws", () => {
     expect(formatForOutFile("a.json", "csv")).toBe("csv");
+    expect(() => formatForOutFile("a.json", "yaml")).toThrow(FormatError);
   });
 });
 

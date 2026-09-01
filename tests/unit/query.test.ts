@@ -49,6 +49,22 @@ describe("extractRows", () => {
   });
 });
 
+describe("extractRows BigInt safety (SDK int64)", () => {
+  it("converts safe bigints to numbers and huge ones to strings", () => {
+    const result = {
+      items: [
+        { value: { n: BigInt(42), big: BigInt("9223372036854775807") } },
+        { value: { meta: { deep: BigInt(-5) }, list: [BigInt(1)] } },
+      ],
+    };
+    const rows = extractRows(result as never);
+    expect(rows[0]).toEqual({ n: 42, big: "9223372036854775807" });
+    expect(rows[1]).toEqual({ meta: { deep: -5 }, list: [1] });
+    // JSON.stringify must never throw on extracted rows
+    expect(() => JSON.stringify(rows)).not.toThrow();
+  });
+});
+
 describe("capRows", () => {
   const rows = Array.from({ length: 5 }, (_, i) => ({ n: i }));
 

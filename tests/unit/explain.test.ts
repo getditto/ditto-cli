@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
+import { describe, expect, it } from "vitest";
 import { renderExplain } from "../../src/render/explain.js";
 
 const fixture = JSON.parse(

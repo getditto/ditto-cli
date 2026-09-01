@@ -17,15 +17,38 @@ function stateFile(): string {
 
 export function readState(): CliState {
   try {
-    return JSON.parse(fs.readFileSync(stateFile(), "utf8")) as CliState;
+    const parsed: unknown = JSON.parse(fs.readFileSync(stateFile(), "utf8"));
+    // Corrupt or non-object content (including "null") is not state.
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return {};
+    return parsed as CliState;
   } catch {
     return {};
   }
 }
 
+/** Best-effort: state is a one-time-warning nicety and must never fail a query. */
 export function writeState(patch: CliState): CliState {
   const next = { ...readState(), ...patch };
-  fs.mkdirSync(configDir(), { recursive: true });
-  fs.writeFileSync(stateFile(), `${JSON.stringify(next, null, 2)}\n`, "utf8");
+  try {
+    fs.mkdirSync(configDir(), { recursive: true });
+    // tmp + rename: concurrent writers must not corrupt or partially write it
+    // (this file will also hold the update-check cache, which is NOT loss-tolerant).
+    const tmp = `${stateFile()}.${process.pid}.tmp`;
+    fs.writeFileSync(tmp, `${JSON.stringify(next, null, 2)}\n`, "utf8");
+    fs.renameSync(tmp, stateFile());
+    // Sweep orphaned tmp files from crashed writers (pid-namespaced).
+    try {
+      const base = path.basename(stateFile());
+      for (const f of fs.readdirSync(configDir())) {
+        if (f.startsWith(`${base}.`) && f.endsWith(".tmp")) {
+          fs.rmSync(path.join(configDir(), f), { force: true });
+        }
+      }
+    } catch {
+      // best-effort sweep
+    }
+  } catch {
+    // read-only config dir (sandboxed CI etc.) — fine, warn again next time
+  }
   return next;
 }

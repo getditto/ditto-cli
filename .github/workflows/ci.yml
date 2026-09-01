@@ -31,7 +31,7 @@ jobs:
       - run: npm run build
       - name: bundle contains no raw token (guard for M8 token stamping)
         run: |
-          if [ -n "${{ secrets.DQL_OFFLINE_LICENSE }}" ] && grep -qF "${{ secrets.DQL_OFFLINE_LICENSE }}" dist/cli.js; then
+          if [ -n "${{ secrets.DQL_OFFLINE_LICENSE }}" ] && grep -rqF "${{ secrets.DQL_OFFLINE_LICENSE }}" dist/; then
             echo "::error::raw offline token found in bundle"
             exit 1
           fi

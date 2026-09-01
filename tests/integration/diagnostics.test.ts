@@ -43,7 +43,7 @@ describe.skipIf(!hasDevCredentials)(`integration: diagnostics (${NO_CREDENTIALS}
     expect(r.rows).toBe(1);
     expect(r.profile?.plan?.children.length).toBeGreaterThan(0);
     expect(r.profile?.times.elapsedNs).toBeGreaterThan(0);
-    const out = outSpy.mock.calls.flat().join("\n");
+    const out = errSpy.mock.calls.flat().join("\n");
     expect(out).toContain("Execution Profile");
     expect(out).toContain("filter");
   });
@@ -56,7 +56,7 @@ describe.skipIf(!hasDevCredentials)(`integration: diagnostics (${NO_CREDENTIALS}
       explain: true,
     });
     expect(r.ok).toBe(true);
-    const out = outSpy.mock.calls.flat().join("\n");
+    const out = errSpy.mock.calls.flat().join("\n");
     expect(out).toContain("Query plan");
     expect(out).toContain("scan");
   });

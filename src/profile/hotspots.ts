@@ -1,3 +1,4 @@
+import { stripControlChars } from "../render/sanitize.js";
 import type { PlanNode } from "./parse.js";
 
 /** Sum of exec time over a node's subtree (ns). */
@@ -25,7 +26,13 @@ export function annotatePlan(root: PlanNode): AnnotatedNode[] {
   const walk = (node: PlanNode, depth: number) => {
     const execNs = node.stats?.phaseTimes?.exec ?? 0;
     const fraction = total > 0 ? execNs / total : 0;
-    out.push({ node, depth, execNs, fraction, isHotspot: fraction >= HOTSPOT_THRESHOLD && execNs > 0 });
+    out.push({
+      node,
+      depth,
+      execNs,
+      fraction,
+      isHotspot: fraction >= HOTSPOT_THRESHOLD && execNs > 0,
+    });
     for (const child of node.children) walk(child, depth + 1);
   };
   walk(root, 0);
@@ -38,8 +45,8 @@ export function keyAttribute(node: PlanNode): string | undefined {
   for (const key of priority) {
     const hit = node.attributes.find(([k]) => k === key);
     if (hit) {
-      const v = typeof hit[1] === "string" ? hit[1] : JSON.stringify(hit[1]);
-      return `${key}=${v}`;
+      const v = typeof hit[1] === "string" ? hit[1] : (JSON.stringify(hit[1]) ?? "undefined");
+      return `${key}=${stripControlChars(v)}`;
     }
   }
   return undefined;

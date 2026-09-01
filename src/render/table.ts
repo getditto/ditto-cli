@@ -1,10 +1,10 @@
 import chalk from "chalk";
+import stringWidth from "string-width";
+import { sanitizeCell } from "./sanitize.js";
 
-/** String length ignoring ANSI escape codes (good enough for our own output). */
-// biome-ignore lint/suspicious/noControlCharactersInRegex: intentional ANSI escape-code matching
-const ANSI = /\x1b\[[0-9;]*m/g;
+/** Display width (accounts for CJK wide chars and emoji; strips ANSI codes). */
 function visibleLength(s: string): number {
-  return s.replace(ANSI, "").length;
+  return stringWidth(s);
 }
 
 function cell(value: unknown): string {
@@ -13,12 +13,16 @@ function cell(value: unknown): string {
   if (typeof value === "object") {
     const v = value as Record<string, unknown>;
     // Ditto attachment handles surface as objects with an id + len.
-    if (typeof v.id === "string" && typeof v.len === "number") {
-      return `[attachment id=${v.id} len=${v.len}]`;
+    if (
+      typeof v.id === "string" &&
+      typeof v.len === "number" &&
+      ("metadata" in v || "mime_type" in v)
+    ) {
+      return `[attachment id=${sanitizeCell(v.id)} len=${v.len}]`;
     }
-    return JSON.stringify(value);
+    return sanitizeCell(JSON.stringify(value));
   }
-  return String(value);
+  return sanitizeCell(String(value));
 }
 
 /**
@@ -42,11 +46,20 @@ export function renderTable(rows: Record<string, unknown>[]): string {
       }
     }
   }
+  // Sanitize keys BEFORE measuring — control chars measure 0 wide but render
+  // as markers (⏎/⇥), which would make repeat counts go negative (crash).
+  const header = cols.map((c) => sanitizeCell(c));
 
   const data = rows.map((row) => cols.map((c) => cell(row[c])));
-  const widths = cols.map((c, i) =>
-    Math.max(c.length, ...data.map((r) => visibleLength(r[i] ?? ""))),
-  );
+  // Loop, not spread — Math.max(...spread) overflows the call stack past ~150k rows.
+  const widths = header.map((h, i) => {
+    let w = visibleLength(h);
+    for (const r of data) {
+      const rw = visibleLength(r[i] ?? "");
+      if (rw > w) w = rw;
+    }
+    return w;
+  });
 
   const line = (left: string, mid: string, right: string) =>
     left + widths.map((w) => "─".repeat(w + 2)).join(mid) + right;
@@ -57,7 +70,7 @@ export function renderTable(rows: Record<string, unknown>[]): string {
 
   const out: string[] = [];
   out.push(line("┌", "┬", "┐"));
-  out.push(row(cols.map((c) => chalk.bold(c))));
+  out.push(row(header.map((h) => chalk.bold(h))));
   out.push(line("├", "┼", "┤"));
   for (const r of data) out.push(row(r));
   out.push(line("└", "┴", "┘"));

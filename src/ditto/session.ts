@@ -1,6 +1,7 @@
 import fs from "node:fs";
-import * as sdk from "@dittolive/ditto";
+import type * as sdk from "@dittolive/ditto";
 import type { Identity } from "../identity/token.js";
+import { scrubEnvForSdk } from "./sanitize-env.js";
 
 export class LockError extends Error {
   readonly exitCode = 4;
@@ -18,7 +19,63 @@ export interface QueryExecutor {
   execute(statement: string, args?: sdk.DQLQueryArguments): Promise<sdk.QueryResult>;
 }
 
+/** Data-directory creation/writability failures → exit 3 (platform bucket). */
+export class DataDirError extends Error {
+  readonly exitCode = 3;
+  constructor(dir: string, cause: string) {
+    super(`Cannot create or write the data directory: ${dir}\n${cause}`);
+    this.name = "DataDirError";
+  }
+}
+
+/** Token/license failures (invalid, unverifiable, or expired credentials) → exit 3. */
+export class TokenError extends Error {
+  readonly exitCode = 3;
+  constructor(message: string) {
+    super(message);
+    this.name = "TokenError";
+  }
+}
+
+/** The SDK can't load on this platform (unsupported OS/arch) → exit 3. */
+export class PlatformError extends Error {
+  readonly exitCode = 3;
+  constructor(cause: string) {
+    super(
+      `The Ditto SDK could not load on ${process.platform}/${process.arch}: ${cause}\n` +
+        `Supported: macOS arm64, Linux x64/arm64, Windows x64 (Node 20+).`,
+    );
+    this.name = "PlatformError";
+  }
+}
+
+/** SDK errors that indicate a credential problem rather than a query problem. */
+export function isLicenseError(err: unknown): boolean {
+  const e = err as { message?: string; code?: string };
+  const text = `${e.code ?? ""} ${e.message ?? ""}`;
+  return (
+    /license|token|verification|unauthorized|authenticat/i.test(text) && !/query|dql/i.test(text)
+  );
+}
+
+// The SDK is loaded lazily: its native tracing layer panics (abort/exit 134)
+// when NO_COLOR is set, so we scrub the env BEFORE first evaluation.
+type DittoSdk = typeof import("@dittolive/ditto");
+let sdkModule: DittoSdk | undefined;
 let initialized = false;
+
+async function loadSdk(): Promise<DittoSdk> {
+  if (!sdkModule) {
+    scrubEnvForSdk();
+    try {
+      sdkModule = await import("@dittolive/ditto");
+    } catch (err) {
+      // Native module missing for this OS/arch (darwin-x64, win32-arm64, …)
+      throw new PlatformError((err as Error).message);
+    }
+  }
+  return sdkModule;
+}
 
 export class DittoSession {
   private constructor(private readonly ditto: sdk.Ditto) {}
@@ -27,8 +84,13 @@ export class DittoSession {
    * Open an offline-only session. Sync is never started.
    */
   static async open(identity: Identity, dataDir: string): Promise<DittoSession> {
-    fs.mkdirSync(dataDir, { recursive: true });
+    try {
+      fs.mkdirSync(dataDir, { recursive: true });
+    } catch (err) {
+      throw new DataDirError(dataDir, (err as NodeJS.ErrnoException).message);
+    }
 
+    const sdk = await loadSdk();
     if (!initialized) {
       // Keep SDK logs off stdout/stderr so results stay pipeable.
       // Known cosmetic issue: the native tracing bootstrap still writes 7
@@ -52,9 +114,28 @@ export class DittoSession {
       ) {
         throw new LockError(dataDir);
       }
+      // Dir exists but is unwritable — the SDK reports the raw OS error.
+      if (/permission denied|EACCES|os error 13/i.test(message)) {
+        throw new DataDirError(
+          dataDir,
+          `Permission denied — check the directory's permissions (chmod/chown).`,
+        );
+      }
+      if (isLicenseError(err)) {
+        throw new TokenError(`License rejected: ${message}`);
+      }
       throw err;
     }
-    await ditto.setOfflineOnlyLicenseToken(identity.token);
+    try {
+      await ditto.setOfflineOnlyLicenseToken(identity.token);
+    } catch (err) {
+      // Don't leak the opened (lock-holding) Ditto on license failure.
+      await ditto.close().catch(() => {});
+      if (isLicenseError(err)) {
+        throw new TokenError(`License rejected: ${(err as Error).message}`);
+      }
+      throw err;
+    }
     // NOTE: startSync() is intentionally never called (offline-only, shared app id).
     return new DittoSession(ditto);
   }

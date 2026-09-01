@@ -1,9 +1,14 @@
-import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
+import { describe, expect, it } from "vitest";
 import { formatNs, percentOfTotal } from "../../src/profile/format.js";
-import { annotatePlan, HOTSPOT_THRESHOLD, keyAttribute, subtreeExecNs } from "../../src/profile/hotspots.js";
-import { extractProfile, parseProfileItem, type PlanNode } from "../../src/profile/parse.js";
+import {
+  annotatePlan,
+  HOTSPOT_THRESHOLD,
+  keyAttribute,
+  subtreeExecNs,
+} from "../../src/profile/hotspots.js";
+import { extractProfile, type PlanNode, parseProfileItem } from "../../src/profile/parse.js";
 import { renderProfile } from "../../src/render/profile.js";
 
 // Real envelope captured from SDK 5.1.0 (scripts/spike-c.mjs). `envelope` is
@@ -43,6 +48,23 @@ describe("parseProfileItem (real SDK 5.1.0 envelope)", () => {
     expect(parseProfileItem({ _id: "1", title: "Alien" })).toBeUndefined();
     expect(parseProfileItem(null)).toBeUndefined();
     expect(parseProfileItem("string")).toBeUndefined();
+  });
+
+  it("bare form requires a times object + another marker (state-only rows are user data)", () => {
+    expect(parseProfileItem({ _id: "b", state: "done" })).toBeUndefined();
+    expect(parseProfileItem({ times: { elapsed: 100 }, state: "completed" })).toBeDefined();
+  });
+
+  it("tolerates null children in the plan tree", () => {
+    const p = parseProfileItem({
+      "~request_profile": {
+        times: { elapsed: 1 },
+        state: "completed",
+        plan: { "#operator": "sequence", children: [null, { "#operator": "scan" }] },
+      },
+    })!;
+    expect(p.plan?.children).toHaveLength(1);
+    expect(p.plan?.children[0]?.name).toBe("scan");
   });
 
   it("parses operator stats and attributes", () => {
@@ -102,8 +124,18 @@ describe("hotspots", () => {
     attributes: [],
     stats: { phaseTimes: { exec: 0 } },
     children: [
-      { name: "scan", attributes: [["collection", "movies"]], stats: { phaseTimes: { exec: 100 }, documentsOut: 50 }, children: [] },
-      { name: "filter", attributes: [["condition", "rated = PG"]], stats: { phaseTimes: { exec: 900 }, documentsIn: 50, documentsOut: 10 }, children: [] },
+      {
+        name: "scan",
+        attributes: [["collection", "movies"]],
+        stats: { phaseTimes: { exec: 100 }, documentsOut: 50 },
+        children: [],
+      },
+      {
+        name: "filter",
+        attributes: [["condition", "rated = PG"]],
+        stats: { phaseTimes: { exec: 900 }, documentsIn: 50, documentsOut: 10 },
+        children: [],
+      },
     ],
   };
 

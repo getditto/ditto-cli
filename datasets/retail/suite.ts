@@ -237,9 +237,10 @@ export function generateOrders(
     const month = d.getUTCMonth() + 1;
     const dayStr = `${year}${String(month).padStart(2, "0")}${String(d.getUTCDate()).padStart(2, "0")}`;
     const avgSeasonal = CATEGORIES.reduce((s, c) => s + categorySeasonal(c[0], month), 0) / CATEGORIES.length;
-    for (const [sid] of STORES) {
-      const lam = basePerDay * storeVolume(sid) * avgSeasonal * (YOY[year] ?? 1.0);
-      for (let k = 0; k < rng.poisson(lam); k++) {
+      for (const [sid] of STORES) {
+        const lam = basePerDay * storeVolume(sid) * avgSeasonal * (YOY[year] ?? 1.0);
+        const dayOrders = rng.poisson(lam); // draw ONCE per (day, store)
+        for (let k = 0; k < dayOrders; k++) {
         const sameStore = byStore.get(sid);
         const cust = rng.chance(0.95) && sameStore?.length ? rng.pick(sameStore) : rng.pick(customers);
         const seq = (seqPerDay.get(dayStr) ?? 0) + 1;
@@ -371,8 +372,13 @@ function generate({ docs, rng, seed }: GenerateOptions) {
 
   const anchor = anchorOrder();
   upsertAnchors(customers, [ANCHOR_CUSTOMER, ANCHOR_CUSTOMER_2]);
+  // If the anchor order patches a generated order (same id), the generated
+  // order's items no longer match the anchor's totals — drop them first.
+  const anchorOrderId = anchor.order._id as string;
+  const anchorCollides = orders.some((o) => o._id === anchorOrderId);
+  const keptItems = anchorCollides ? items.filter((i) => i.order_id !== anchorOrderId) : items;
   upsertAnchors(orders, [anchor.order]);
-  upsertAnchors(items, [anchor.item]);
+  upsertAnchors(keptItems, [anchor.item]);
 
   return [
     { collection: "stores", docs: stores },
@@ -381,7 +387,7 @@ function generate({ docs, rng, seed }: GenerateOptions) {
     { collection: "customers", docs: customers },
     { collection: "inventory", docs: inventory },
     { collection: "orders", docs: orders },
-    { collection: "order_items", docs: items },
+    { collection: "order_items", docs: keptItems },
   ];
 }
 
@@ -399,18 +405,6 @@ const suite: DatasetSuite = {
     { name: "inventory", shape: "_id {store_id,product_id}, stock_level, location{aisle,shelf,bin}, last_counted, deleted (~8×400×0.99)" },
     { name: "orders", shape: "_id order_YYYYMMDD_NNNN, customer_id, store_id, order_date, customer_name/email, store_name, item_count, subtotal, total, status, deleted (scales with --docs)" },
     { name: "order_items", shape: "_id (uuid), order_id, store_id, product_id, sku, quantity, unit_price, discount_percent, line_total, deleted (~2× orders)" },
-  ],
-  setupStatements: [
-    "CREATE INDEX customers_email ON customers (email)",
-    "CREATE INDEX customers_primary_store ON customers (primary_store_id, deleted)",
-    "CREATE INDEX products_sku ON products (sku)",
-    "CREATE INDEX products_category ON products (category_id, deleted)",
-    "CREATE INDEX products_price ON products (deleted, base_price)",
-    "CREATE INDEX inventory_store ON inventory (_id.store_id, deleted)",
-    "CREATE INDEX orders_store ON orders (store_id, deleted)",
-    "CREATE INDEX orders_date ON orders (deleted, order_date)",
-    "CREATE INDEX orders_store_status_date ON orders (store_id, status, order_date)",
-    "CREATE INDEX order_items_order ON order_items (order_id)",
   ],
   catalog: catalog as unknown as Record<string, CatalogQuery>,
   generate,

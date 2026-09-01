@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { DittoSession, LockError } from "../../src/ditto/session.js";
 import { loadIdentity } from "../../src/identity/token.js";
@@ -79,6 +80,30 @@ describe.skipIf(!hasDevCredentials)(`integration: DittoSession (${NO_CREDENTIALS
     await expect(DittoSession.open(loadIdentity(), dataDir)).rejects.toSatisfy(
       (err) => err instanceof LockError && err.exitCode === 4 && err.message.includes(dataDir),
     );
+  });
+
+  it("doctor reports a held lock on the real data dir (exit 3)", async () => {
+    const { collectDoctorChecks } = await import("../../src/cli/groups/dql/doctor.js");
+    // session holds the lock on dataDir (opened in beforeAll)
+    const checks = await collectDoctorChecks({ dataDir });
+    const lock = checks.find((c) => c.label === "lock")!;
+    expect(lock).toBeDefined();
+    expect(lock.ok).toBe(false);
+    expect(lock.detail).toContain("locked by another process");
+  });
+
+  it("a read-only data dir maps to DataDirError (exit 3)", async () => {
+    const roDir = tmpDataDir("ditto-ro-");
+    fs.chmodSync(roDir, 0o555);
+    try {
+      await expect(DittoSession.open(loadIdentity(), roDir)).rejects.toMatchObject({
+        name: "DataDirError",
+        exitCode: 3,
+      });
+    } finally {
+      fs.chmodSync(roDir, 0o755);
+      rmrf(roDir);
+    }
   });
 
   it("surfaces DQL parse errors with an SDK error code", async () => {

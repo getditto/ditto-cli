@@ -1,9 +1,10 @@
 // Spike C: capture a real ~request_profile envelope from the SDK as a test fixture.
 // Run: node --env-file=.env scripts/spike-c.mjs
-import * as sdk from "@dittolive/ditto";
+
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import * as sdk from "@dittolive/ditto";
 
 const appId = process.env.DATABASE_ID;
 const token = process.env.OFFLINE_TOKEN;
@@ -15,7 +16,9 @@ if (!appId || !token) {
 const storeDir = fs.mkdtempSync(path.join(os.tmpdir(), "ditto-spike-c-"));
 sdk.Logger.enabled = false;
 await sdk.init();
-const ditto = await sdk.Ditto.open(new sdk.DittoConfig(appId, { mode: "smallPeersOnly" }, storeDir));
+const ditto = await sdk.Ditto.open(
+  new sdk.DittoConfig(appId, { mode: "smallPeersOnly" }, storeDir),
+);
 await ditto.setOfflineOnlyLicenseToken(token);
 
 // Seed some movies so the plan has real scans
@@ -27,7 +30,9 @@ const docs = Array.from({ length: 200 }, (_, i) => ({
   runtime: 60 + (i % 180),
 }));
 for (const d of docs) {
-  await ditto.store.execute("INSERT INTO movies DOCUMENTS (:doc) ON ID CONFLICT DO UPDATE", { doc: d });
+  await ditto.store.execute("INSERT INTO movies DOCUMENTS (:doc) ON ID CONFLICT DO UPDATE", {
+    doc: d,
+  });
 }
 
 const queries = [
@@ -37,14 +42,18 @@ const queries = [
 const out = [];
 for (const q of queries) {
   const result = await ditto.store.execute(q);
-  const items = (result.items ?? []).map((it) => (typeof it.value === "function" ? it.value() : it.value));
+  const items = (result.items ?? []).map((it) =>
+    typeof it.value === "function" ? it.value() : it.value,
+  );
   const envelope = items.findLast((v) => v && typeof v === "object" && "~request_profile" in v);
   out.push({ query: q, itemCount: items.length, envelope });
 }
 
 // Also capture an EXPLAIN plan
 const explain = await ditto.store.execute("EXPLAIN SELECT * FROM movies WHERE rated = 'PG'");
-const explainItems = (explain.items ?? []).map((it) => (typeof it.value === "function" ? it.value() : it.value));
+const explainItems = (explain.items ?? []).map((it) =>
+  typeof it.value === "function" ? it.value() : it.value,
+);
 
 await ditto.close();
 fs.rmSync(storeDir, { recursive: true, force: true });
@@ -57,5 +66,11 @@ const fixture = {
 };
 fs.writeFileSync("tests/unit/fixtures/profile-envelope.json", JSON.stringify(fixture, null, 2));
 console.log("fixture written: tests/unit/fixtures/profile-envelope.json");
-console.log("envelope top-level keys:", out[0]?.envelope ? Object.keys(out[0].envelope["~request_profile"]) : "NONE");
-console.log("plan root:", JSON.stringify(out[0]?.envelope?.["~request_profile"]?.plan).slice(0, 400));
+console.log(
+  "envelope top-level keys:",
+  out[0]?.envelope ? Object.keys(out[0].envelope["~request_profile"]) : "NONE",
+);
+console.log(
+  "plan root:",
+  JSON.stringify(out[0]?.envelope?.["~request_profile"]?.plan).slice(0, 400),
+);

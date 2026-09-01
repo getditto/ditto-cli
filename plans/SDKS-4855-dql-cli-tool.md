@@ -29,7 +29,7 @@ An installable TypeScript CLI invoked as **`ditto`** — a single, extensible co
 - Piped stdin: `echo "SELECT * FROM movies" | ditto dql`
 - Interactive REPL: bare `ditto dql` — readline history, `.help`, `.collections`, `.indexes <collection>`, `.exit`; multi-line statements terminated by `;`
 - Parameter binding: `-p name=value` (repeatable, values JSON-parsed with string fallback) or `--args '<json-object>'`, bound to `:name` placeholders
-- Result caps: `--max-rows` (default 10,000), truncation banner "showing first N of M — add a LIMIT clause"
+- Result caps: `--max-rows` (default 10,000; display only — `-o` file exports are uncapped unless `--max-rows` is explicit), truncation banner "showing first N of M rows — add a LIMIT clause"
 - **Output to file:** `-o/--out <path>` writes results in the selected `--format` (default inferred from extension: `.json`, `.csv`, anything else → table text); stdout prints a one-line summary ("Wrote 1,234 rows to results.json in 12 ms")
 - **Piping:** when stdout is not a TTY, output auto-selects JSON so results compose cleanly with tools like `jq` (`ditto dql "SELECT * FROM stores" | jq '.[] | .store_name'`). Progress, warnings, and errors always go to **stderr**, never stdout
 - **No-LIMIT warning:** the first time a user runs a bare `SELECT` without a `LIMIT` clause on a TTY, print a one-time warning that unbounded queries can return very large result sets, pointing at `LIMIT`, `--max-rows`, and `-o`. A `noLimitWarned` flag is persisted in the config dir so it fires once per user; statements with `LIMIT` or an explicit `--max-rows` never trigger it

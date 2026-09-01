@@ -59,8 +59,11 @@ export class Rng {
     return mean + stddev * Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
   }
 
-  /** Poisson count (Knuth's algorithm — fine for small lambda). */
+  /** Poisson count (Knuth's algorithm; normal approximation for large lambda — Knuth underflows past ~745). */
   poisson(lambda: number): number {
+    if (lambda > 700) {
+      return Math.max(0, Math.round(this.gauss(lambda, Math.sqrt(lambda))));
+    }
     const L = Math.exp(-lambda);
     let k = 0;
     let p = 1;
@@ -84,7 +87,9 @@ export class Rng {
   /** 128 random bits as a UUID v4 string. */
   uuid(): string {
     const hex = Array.from({ length: 4 }, () =>
-      Math.floor(this.next() * 0xffffffff).toString(16).padStart(8, "0"),
+      Math.floor(this.next() * 0xffffffff)
+        .toString(16)
+        .padStart(8, "0"),
     ).join("");
     return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-${((parseInt(hex[16]!, 16) & 0x3) | 0x8).toString(16)}${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
   }

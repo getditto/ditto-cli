@@ -29,7 +29,7 @@ export function renderCsv(rows: Record<string, unknown>[]): string {
     return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
 
-  const lines = [cols.map(escape).join(",")];
+  const lines = [cols.map(escapeCell).join(",")];
   for (const row of rows) {
     lines.push(cols.map((c) => escapeCell(row[c])).join(","));
   }

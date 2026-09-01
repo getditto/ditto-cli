@@ -24,6 +24,12 @@ export interface Identity {
   token: string;
   /** ISO date string when the token expires, if known. */
   expiresOn?: string;
+  /**
+   * Where the token came from. Expiry nag/blocking applies only to embedded
+   * (release) tokens — dev tokens from .env may have stale EXPIRE_ON dates
+   * and the SDK accepts them regardless.
+   */
+  source: "env" | "embedded";
 }
 
 export class IdentityError extends Error {
@@ -49,7 +55,7 @@ export function loadIdentity(env: NodeJS.ProcessEnv = process.env): Identity {
       "Dev build: set DATABASE_ID and OFFLINE_TOKEN in a repo-root .env (see .env.sample).",
     );
   }
-  return { appId, token, expiresOn };
+  return { appId, token, expiresOn, source: "env" };
 }
 
 /** Days until the token expires, or null if unknown/unparseable. */
