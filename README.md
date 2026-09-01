@@ -1,4 +1,4 @@
-# ditto CLI
+# Ditto CLI
 
 The command-line tool for [Ditto](https://www.ditto.live) — run DQL statements against a local, offline-only Ditto store, load realistic sample datasets, and get rich diagnostics (timing, EXPLAIN, PROFILE, ADVISE) in your terminal.
 
