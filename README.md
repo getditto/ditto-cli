@@ -4,12 +4,13 @@ The command-line tool for [Ditto](https://www.ditto.live) — run DQL statements
 
 ```
 $ ditto dql "SELECT _id.title, _id.year, rated FROM movies WHERE _id.year > '2000' LIMIT 3"
-┌──────────────┬───────┬───────┐
-│ title        │ year      │ rated │
-├──────────────┼───────┼───────┤
-│ Wild Trek    │ 2002      │ R     │
-...
-└──────────────┴───────────┴───────┘
+┌─────────┬───────────────┬──────┐
+│ rated   │ title         │ year │
+├─────────┼───────────────┼──────┤
+│ UNRATED │ Wild Trek     │ 2002 │
+│ R       │ Hidden Mirror │ 2008 │
+│ R       │ Silent Runner │ 2013 │
+└─────────┴───────────────┴──────┘
 3 rows
 ```
 
