@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { execa } from "execa";
 import { describe, expect, it } from "vitest";
-import { rmrf, tmpDataDir } from "../helpers/credentials.js";
+import { hasDevCredentials, NO_CREDENTIALS, rmrf, tmpDataDir } from "../helpers/credentials.js";
 
 const ROOT = path.resolve(import.meta.dirname, "../..");
 
@@ -55,42 +55,49 @@ describe("e2e: ditto version / update / banner", () => {
     expect(r.stdout).not.toContain("update available");
   });
 
-  it("--no-update-check parses in every position and never breaks the command", async () => {
-    const dir = tmpDataDir("ditto-e2e-");
-    try {
-      for (const args of [
-        ["--no-update-check", "dql", "SELECT 1 FROM system:collections", "-d", dir],
-        ["dql", "--no-update-check", "SELECT 1 FROM system:collections", "-d", dir],
-        ["dql", "SELECT 1 FROM system:collections", "-d", dir, "--no-update-check"],
-      ]) {
-        const r = (await cli(args)) as unknown as RunResult;
-        expect(r.exitCode, JSON.stringify(args)).toBe(0);
-        expect(r.stderr).not.toContain("update available");
+  // Query-touching tests need the dev token (CI without secrets skips).
+  it.skipIf(!hasDevCredentials)(
+    `--no-update-check parses in every position and never breaks the command (${NO_CREDENTIALS})`,
+    async () => {
+      const dir = tmpDataDir("ditto-e2e-");
+      try {
+        for (const args of [
+          ["--no-update-check", "dql", "SELECT 1 FROM system:collections", "-d", dir],
+          ["dql", "--no-update-check", "SELECT 1 FROM system:collections", "-d", dir],
+          ["dql", "SELECT 1 FROM system:collections", "-d", dir, "--no-update-check"],
+        ]) {
+          const r = (await cli(args)) as unknown as RunResult;
+          expect(r.exitCode, JSON.stringify(args)).toBe(0);
+          expect(r.stderr).not.toContain("update available");
+        }
+      } finally {
+        rmrf(dir);
       }
-    } finally {
-      rmrf(dir);
-    }
-  });
+    },
+  );
 
-  it("the banner never appears on stdout, even with a poisoned fresh cache", async () => {
-    const dir = tmpDataDir("ditto-e2e-");
-    const cfg = tmpDataDir("ditto-e2e-cfg-");
-    try {
-      fs.writeFileSync(
-        path.join(cfg, "state.json"),
-        JSON.stringify({ updateCheck: { checkedAt: Date.now(), latest: "99.99.99" } }),
-        "utf8",
-      );
-      const r = (await cli(["dql", "SELECT 1 FROM system:collections", "-d", dir], {
-        DITTO_CONFIG_DIR: cfg,
-      })) as unknown as RunResult;
-      expect(r.exitCode).toBe(0);
-      // piped (non-TTY) → banner suppressed entirely; stdout is pure JSON
-      expect(JSON.parse(r.stdout)).toBeDefined();
-      expect(r.stderr).not.toContain("update available");
-    } finally {
-      rmrf(dir);
-      rmrf(cfg);
-    }
-  });
+  it.skipIf(!hasDevCredentials)(
+    `the banner never appears on stdout, even with a poisoned fresh cache (${NO_CREDENTIALS})`,
+    async () => {
+      const dir = tmpDataDir("ditto-e2e-");
+      const cfg = tmpDataDir("ditto-e2e-cfg-");
+      try {
+        fs.writeFileSync(
+          path.join(cfg, "state.json"),
+          JSON.stringify({ updateCheck: { checkedAt: Date.now(), latest: "99.99.99" } }),
+          "utf8",
+        );
+        const r = (await cli(["dql", "SELECT 1 FROM system:collections", "-d", dir], {
+          DITTO_CONFIG_DIR: cfg,
+        })) as unknown as RunResult;
+        expect(r.exitCode).toBe(0);
+        // piped (non-TTY) → banner suppressed entirely; stdout is pure JSON
+        expect(JSON.parse(r.stdout)).toBeDefined();
+        expect(r.stderr).not.toContain("update available");
+      } finally {
+        rmrf(dir);
+        rmrf(cfg);
+      }
+    },
+  );
 });
