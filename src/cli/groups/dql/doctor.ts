@@ -60,9 +60,9 @@ export async function collectDoctorChecks(opts: DoctorOptions = {}): Promise<Doc
 
   const nodeMajor = Number(nodeVersion.split(".")[0]);
   checks.push({
-    ok: nodeMajor >= 20,
+    ok: nodeMajor >= 22,
     label: "node",
-    detail: `v${nodeVersion}${nodeMajor >= 20 ? "" : " — Node 20+ required"}`,
+    detail: `v${nodeVersion}${nodeMajor >= 22 ? "" : " — Node 22+ required"}`,
   });
 
   const dataDir = resolveDataDir(opts.dataDir, env);

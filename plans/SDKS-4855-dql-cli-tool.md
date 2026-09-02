@@ -167,7 +167,7 @@ ditto skills list          # show installed skills + versions per agent/location
 
 ### 11. Platform support
 
-Exactly the `@dittolive/ditto@5.1.0` native binary matrix (verified from the npm tarball): **macOS arm64, Linux x64, Linux arm64, Windows x64**. No darwin-x64 in 5.1.0 — `ditto dql doctor` and startup gate with a friendly unsupported-platform message. Node ≥ 20. `package.json` carries `os`/`cpu`/`engines` restrictions.
+Exactly the `@dittolive/ditto@5.1.0` native binary matrix (verified from the npm tarball): **macOS arm64, Linux x64, Linux arm64, Windows x64**. No darwin-x64 in 5.1.0 — `ditto dql doctor` and startup gate with a friendly unsupported-platform message. Node ≥ 22. `package.json` carries `os`/`cpu`/`engines` restrictions.
 
 ### 12. Distribution
 
@@ -209,7 +209,7 @@ Command registration is namespaced (`ditto <group> <command>`) so future groups 
 
 Exit codes: `0` ok · `1` query/DQL error · `2` usage · `3` platform/token · `4` data-dir lock.
 
-## Architecture (ESM TypeScript, Node ≥ 20)
+## Architecture (ESM TypeScript, Node ≥ 22)
 
 ```
 datasets/                 # vendored suite definitions (no generated data committed)
@@ -252,7 +252,7 @@ tests/
 - **Unit (no SDK):** command registry routing (`ditto dql …` vs future groups); data-dir precedence; statement classifier edge cases lifted from Edge Studio (`PROFILE PROFILE`, `EXPLAIN ADVISE`, comment-leading queries); profile parser vs. real `~request_profile` fixtures (from `ditto-vsc-es` test fixtures + Spike A capture); `formatNs`; hotspot math; table/tree snapshots; dataset generators (seeded determinism — same seed ⇒ identical docs, referential integrity, fixed-catalog counts: stores=8, categories=9, locations=7, sale_items=47, products=400); skills installer (mocked fetch + fixture tarballs); agent detection (fixture home dirs); update cache logic; channel detection; token reassembly round-trip vs. `stamp-token.ts`; expiry parsing; `-o` file writer; no-LIMIT warning trigger/persistence.
 - **Integration (real SDK, offline, tmpdir):** seed cookbook **movies/reviews** docs; parameterized queries; counter increment; `CREATE INDEX`; EXPLAIN/PROFILE/ADVISE parse validation; `dataset load movies --docs 100` then catalog queries return sane rows. Requires `OFFLINE_TOKEN`/`DATABASE_ID` (`.env` locally, CI secret); skipped without it.
 - **E2E (execa on built bundle):** one-shot/`-f`/stdin/REPL via the `ditto dql` namespace, exit codes, `--data-dir` isolation, update-banner opt-outs, version/doctor output, dataset list/show/load/run.
-- **CI:** GitHub Actions matrix — macos-latest (arm64), ubuntu-latest, windows-latest × Node 20/22/24. Release dry-run job validates stamp-token + formula-bump steps on pre-release tags.
+- **CI:** GitHub Actions matrix — macos-latest (arm64), ubuntu-latest, windows-latest × Node 22/24. Release dry-run job validates stamp-token + formula-bump steps on pre-release tags.
 
 ## Milestones
 

@@ -80,13 +80,13 @@ describe("collectDoctorChecks", () => {
   it("fails Node < 20", async () => {
     const checks = await collectDoctorChecks({
       openStore: openStoreOk,
-      nodeVersion: "18.19.0",
+      nodeVersion: "20.19.0",
       dataDir: dir,
       env: ENV,
     });
     const n = checks.find((c) => c.label === "node")!;
     expect(n.ok).toBe(false);
-    expect(n.detail).toContain("Node 20+ required");
+    expect(n.detail).toContain("Node 22+ required");
   });
 
   it("fails when the data dir is not writable (path is a file)", async () => {

@@ -1,0 +1,3 @@
+# LF everywhere — biome's formatter enforces LF, and Windows checkouts with
+# autocrlf=true would otherwise lint-fail on day one.
+* text=auto eol=lf

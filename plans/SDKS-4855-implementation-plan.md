@@ -23,7 +23,7 @@ Branch: `aaronlabeau/sdks-4855-dql-cli-tool`. This file is the working checklist
 
 ## Conventions
 
-- ESM (`"type": "module"`), TypeScript strict, `module: "NodeNext"`, Node ≥ 20.
+- ESM (`"type": "module"`), TypeScript strict, `module: "NodeNext"`, Node ≥ 22.
 - Dev runner `tsx`; build `tsup` (bundle all except `@dittolive/ditto`); `vitest` (unit/integration/e2e projects); `biome` lint+format; `execa` for e2e.
 - Runtime deps only: `@dittolive/ditto`, `commander`, `chalk`, `env-paths`, `@inquirer/prompts`, `tar`. No table/tree deps — hand-rolled.
 - Errors: never print raw stack traces to users; typed `CliError` with exit code + actionable message.
@@ -36,7 +36,7 @@ Branch: `aaronlabeau/sdks-4855-dql-cli-tool`. This file is the working checklist
 
 **Goal:** installable dev shell with namespaced command registry; no Ditto yet.
 
-- [x] `package.json` — name `@dittolive/cli`, `bin.ditto → dist/cli.js`, `type: module`, `engines.node >=20`, `os`/`cpu` restrictions, `files: ["dist"]`, scripts: `dev` (tsx + `--env-file=.env`), `typecheck`, `test` _(build/lint scripts + tsup/biome/vitest configs still to add)_
+- [x] `package.json` — name `@dittolive/cli`, `bin.ditto → dist/cli.js`, `type: module`, `engines.node >=22`, `os`/`cpu` restrictions, `files: ["dist"]`, scripts: `dev` (tsx + `--env-file=.env`), `typecheck`, `test` _(build/lint scripts + tsup/biome/vitest configs still to add)_
 - [x] `tsconfig.json`, `.gitignore` (incl. `.env`, `build/token-chunks.ts`, `dist/`) — _tsup/biome/vitest configs pending_
 - [x] `vitest.config.ts` (projects: unit / integration [serial, 120s] / e2e) + `tests/setup/env.ts` (loads repo-root `.env`, `FORCE_COLOR=0`) + `tests/helpers/credentials.ts` (skip-gate + tmpdir helpers) — _tsup/biome configs pending_
 - [x] `src/cli/registry.ts` — group/command registration API _(deferred — group modules register onto commander directly; extract a registry abstraction only if a third group needs it)_
@@ -44,7 +44,7 @@ Branch: `aaronlabeau/sdks-4855-dql-cli-tool`. This file is the working checklist
 - [x] `src/cli/groups/dql/` with `doctor` subcommand: platform/arch vs. SDK matrix, Node version, data-dir writability, token presence + expiry
 - [x] Stub groups `skills` (add/update/list → "not yet implemented" exit 2) and `system` (`version` prints version/channel=dev/platform; `update` stub) — _partial: `ditto version` is commander's `--version`; skills/system groups land at M6/M7_
 - [x] `AGENTS.md` — build/test/run conventions; README stub — _AGENTS.md done; README at M8_
-- [x] `.github/workflows/ci.yml` — lint, typecheck, unit on macos/ubuntu/windows × Node 20/22/24; integration+e2e job (macOS, secrets-gated); bundle token-grep guard
+- [x] `.github/workflows/ci.yml` — lint, typecheck, unit on macos/ubuntu/windows × Node 22/24; integration+e2e job (macOS, secrets-gated); bundle token-grep guard
 - [x] tsup build: `dist/cli.js` ESM bundle w/ shebang + createRequire shim, `__CLI_VERSION__` + `RELEASE` defines; biome lint+format wired (`npm run lint`)
 
 **Tests:** unit — paths precedence matrix (flag/env/default × platforms), registry routing, doctor check aggregation; e2e — `ditto dql doctor`, `ditto version`, unknown command → exit 2.

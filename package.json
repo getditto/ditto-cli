@@ -1,7 +1,7 @@
 {
   "name": "@dittolive/cli",
   "version": "0.1.0",
-  "description": "The Ditto CLI — run DQL against a local Ditto store, load sample datasets, and install DQL skills for AI agents",
+  "description": "The Ditto CLI \u2014 run DQL against a local Ditto store, load sample datasets, and install DQL skills for AI agents",
   "license": "SEE LICENSE IN LICENSE.md",
   "type": "module",
   "bin": {
@@ -11,7 +11,7 @@
     "dist"
   ],
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "os": [
     "darwin",

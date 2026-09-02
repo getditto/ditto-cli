@@ -3,7 +3,9 @@ import { Command, CommanderError } from "commander";
 import { rewriteDefaultSubcommand } from "./default-command.js";
 import { registerDqlGroup } from "./groups/dql/index.js";
 import { registerSkillsGroup } from "./groups/skills/index.js";
+import { registerSystemGroup } from "./groups/system/index.js";
 import { installStdoutGuard } from "./streams.js";
+import { maybeShowUpdateBanner } from "./update-banner.js";
 import { CLI_VERSION } from "./version.js";
 
 installStdoutGuard(); // quiet exit(0) on EPIPE — `| head` is a first-class flow
@@ -21,13 +23,16 @@ program
   .description("The Ditto CLI — run DQL, load sample datasets, install AI agent skills")
   .version(CLI_VERSION)
   .option("--no-color", "disable colored output (also: NO_COLOR, CI, non-TTY)")
-  .option("--quiet", "suppress informational notes on stderr");
+  .option("--quiet", "suppress informational notes on stderr")
+  .option("--no-update-check", "skip the update banner");
 
 const dql = program.command("dql");
 registerDqlGroup(dql);
 
 const skills = program.command("skills");
 registerSkillsGroup(skills);
+
+registerSystemGroup(program);
 
 // Global flags take effect before any subcommand action runs.
 program.hook("preSubcommand", () => {
@@ -53,4 +58,13 @@ try {
     console.error(chalk.red(err instanceof Error ? err.message : String(err)));
     process.exitCode = 1;
   }
+}
+
+// After a successful command: the update banner (cached, non-blocking, stderr).
+// Opt-outs: --no-update-check, DITTO_NO_UPDATE_CHECK, CI, --quiet, piped/JSON.
+if (!process.exitCode) {
+  await maybeShowUpdateBanner(CLI_VERSION, {
+    noCheckFlag: program.opts<{ noUpdateCheck?: boolean }>().noUpdateCheck,
+    quiet: program.opts<{ quiet?: boolean }>().quiet,
+  });
 }

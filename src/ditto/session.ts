@@ -43,7 +43,7 @@ export class PlatformError extends Error {
   constructor(cause: string) {
     super(
       `The Ditto SDK could not load on ${process.platform}/${process.arch}: ${cause}\n` +
-        `Supported: macOS arm64, Linux x64/arm64, Windows x64 (Node 20+).`,
+        `Supported: macOS arm64, Linux x64/arm64, Windows x64 (Node 22+).`,
     );
     this.name = "PlatformError";
   }
