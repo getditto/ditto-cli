@@ -8,7 +8,7 @@ import { dotHelp, makeReplEval } from "./repl-core.js";
 import { type RunOptions, runStatement } from "./run.js";
 
 /**
- * Interactive REPL for `ditto dql` with no statement and a TTY on stdin.
+ * Interactive REPL for `dittosh dql` with no statement and a TTY on stdin.
  * Logic lives in repl-core.ts (unit-tested); this is node:repl wiring.
  */
 export async function startRepl(

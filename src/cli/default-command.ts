@@ -1,5 +1,5 @@
 /**
- * `ditto dql <stmt>` really means `ditto dql exec <stmt>`.
+ * `dittosh dql <stmt>` really means `dittosh dql exec <stmt>`.
  *
  * Commander can't put a default action on a command that also has
  * subcommands without same-named options on the parent swallowing the

@@ -88,7 +88,7 @@ describe("e2e: ditto version / update / banner", () => {
           "utf8",
         );
         const r = (await cli(["dql", "SELECT 1 FROM system:collections", "-d", dir], {
-          DITTO_CONFIG_DIR: cfg,
+          DITTOSH_CONFIG_DIR: cfg,
         })) as unknown as RunResult;
         expect(r.exitCode).toBe(0);
         // piped (non-TTY) → banner suppressed entirely; stdout is pure JSON

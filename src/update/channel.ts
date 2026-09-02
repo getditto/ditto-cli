@@ -14,7 +14,7 @@ export interface ChannelInfo {
   channel: InstallChannel;
   /** The command the user should run to update. */
   updateCommand: string | null;
-  /** Human description for `ditto version`. */
+  /** Human description for `dittosh version`. */
   detail: string;
 }
 
@@ -39,7 +39,7 @@ export function detectChannel(
   ) {
     return {
       channel: "homebrew",
-      updateCommand: "brew update && brew upgrade ditto",
+      updateCommand: "brew update && brew upgrade dittosh",
       detail: `homebrew (${brewPrefix})`,
     };
   }

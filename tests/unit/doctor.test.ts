@@ -141,10 +141,10 @@ describe("collectDoctorChecks", () => {
     expect(t.detail).toContain("2027-06-01");
   });
 
-  it("a valid -d flag wins precedence over a bogus DITTO_DATA_DIR", async () => {
+  it("a valid -d flag wins precedence over a bogus DITTOSH_DATA_DIR", async () => {
     const checks = await collectDoctorChecks({
       dataDir: dir,
-      env: { ...ENV, DITTO_DATA_DIR: "--" } as NodeJS.ProcessEnv,
+      env: { ...ENV, DITTOSH_DATA_DIR: "--" } as NodeJS.ProcessEnv,
       openStore: openStoreOk,
     });
     expect(checks.find((c) => c.label === "data directory")!.ok).toBe(true);
@@ -153,22 +153,22 @@ describe("collectDoctorChecks", () => {
   it("a whitespace-only -d flag falls through to the (bogus) env and fails", async () => {
     const checks = await collectDoctorChecks({
       dataDir: " ",
-      env: { ...ENV, DITTO_DATA_DIR: "--" } as NodeJS.ProcessEnv,
+      env: { ...ENV, DITTOSH_DATA_DIR: "--" } as NodeJS.ProcessEnv,
       openStore: openStoreOk,
     });
     const d = checks.find((c) => c.label === "data directory")!;
     expect(d.ok).toBe(false);
-    expect(d.detail).toContain("DITTO_DATA_DIR");
+    expect(d.detail).toContain("DITTOSH_DATA_DIR");
   });
 
-  it("flags a bogus DITTO_DATA_DIR when no flag overrides it", async () => {
+  it("flags a bogus DITTOSH_DATA_DIR when no flag overrides it", async () => {
     const checks = await collectDoctorChecks({
-      env: { ...ENV, DITTO_DATA_DIR: "--" } as NodeJS.ProcessEnv,
+      env: { ...ENV, DITTOSH_DATA_DIR: "--" } as NodeJS.ProcessEnv,
       openStore: openStoreOk,
     });
     const d = checks.find((c) => c.label === "data directory")!;
     expect(d.ok).toBe(false);
-    expect(d.detail).toContain("DITTO_DATA_DIR");
+    expect(d.detail).toContain("DITTOSH_DATA_DIR");
   });
 
   it("fails the token check when credentials are missing", async () => {

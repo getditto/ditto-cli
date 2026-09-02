@@ -208,7 +208,7 @@ export function registerSkillsGroup(
       if (rows.length === 0) {
         if (format === "json") console.log("[]");
         else console.log("(no skills installed)");
-        note("no skills installed — install with `ditto skills add`");
+        note("no skills installed — install with `dittosh skills add`");
         return;
       }
       console.log(renderRows(rows, format));
@@ -248,7 +248,7 @@ export function registerSkillsGroup(
       }
       if (found.length === 0) {
         if (format === "json") console.log("[]");
-        else console.log(`(no ${opts.skill} skill installed — use \`ditto skills add\`)`);
+        else console.log(`(no ${opts.skill} skill installed — use \`dittosh skills add\`)`);
         note(`no ${opts.skill} skill installed — nothing to update`);
         return;
       }

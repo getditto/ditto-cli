@@ -72,9 +72,9 @@ export async function collectDoctorChecks(opts: DoctorOptions = {}): Promise<Doc
   if (isBogusDataDir(opts.dataDir)) {
     dirOk = false;
     dirDetail = "bogus --data-dir value: expected a directory path";
-  } else if (!opts.dataDir?.trim() && isBogusDataDir(env.DITTO_DATA_DIR)) {
+  } else if (!opts.dataDir?.trim() && isBogusDataDir(env.DITTOSH_DATA_DIR)) {
     dirOk = false;
-    dirDetail = "bogus DITTO_DATA_DIR value: expected a directory path";
+    dirDetail = "bogus DITTOSH_DATA_DIR value: expected a directory path";
   } else if (fs.existsSync(dataDir)) {
     if (!fs.statSync(dataDir).isDirectory()) {
       dirOk = false;

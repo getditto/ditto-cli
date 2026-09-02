@@ -44,7 +44,7 @@ describe("e2e: ditto skills (fixture tarball seam)", () => {
     const home = tmpDataDir("ditto-e2e-home-");
     try {
       const add = (await cli(["skills", "add", "--agent", "claude", "--project", proj], {
-        DITTO_SKILLS_TARBALL: tgz,
+        DITTOSH_SKILLS_TARBALL: tgz,
         HOME: home,
       })) as unknown as RunResult;
       expect(add.exitCode).toBe(0);
@@ -56,7 +56,7 @@ describe("e2e: ditto skills (fixture tarball seam)", () => {
       ).toBe(true);
 
       const list = (await cli(["skills", "list", "--project", proj], {
-        DITTO_SKILLS_TARBALL: tgz,
+        DITTOSH_SKILLS_TARBALL: tgz,
         HOME: home,
       })) as unknown as RunResult;
       expect(list.exitCode).toBe(0);
@@ -76,11 +76,11 @@ describe("e2e: ditto skills (fixture tarball seam)", () => {
     const home = tmpDataDir("ditto-e2e-home-");
     try {
       await cli(["skills", "add", "--agent", "claude", "--project", proj], {
-        DITTO_SKILLS_TARBALL: tgz,
+        DITTOSH_SKILLS_TARBALL: tgz,
         HOME: home,
       });
       const upd = (await cli(["skills", "update", "--project", proj], {
-        DITTO_SKILLS_TARBALL: tgz,
+        DITTOSH_SKILLS_TARBALL: tgz,
         HOME: home,
       })) as unknown as RunResult;
       expect(upd.exitCode).toBe(0);
@@ -98,14 +98,14 @@ describe("e2e: ditto skills (fixture tarball seam)", () => {
     const home = tmpDataDir("ditto-e2e-home-");
     try {
       const badFormat = (await cli(["skills", "list", "--format", "yaml"], {
-        DITTO_SKILLS_TARBALL: tgz,
+        DITTOSH_SKILLS_TARBALL: tgz,
         HOME: home,
       })) as unknown as RunResult;
       expect(badFormat.exitCode).toBe(2);
 
       const badProject = (await cli(
         ["skills", "add", "--agent", "claude", "--project", "/nonexistent-xyz"],
-        { DITTO_SKILLS_TARBALL: tgz, HOME: home },
+        { DITTOSH_SKILLS_TARBALL: tgz, HOME: home },
       )) as unknown as RunResult;
       expect(badProject.exitCode).toBe(2);
       expect(badProject.stderr).toContain("does not exist");

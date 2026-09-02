@@ -19,7 +19,7 @@ const program = new Command();
 program.exitOverride();
 
 program
-  .name("ditto")
+  .name("dittosh")
   .description("The Ditto CLI — run DQL, load sample datasets, install AI agent skills")
   .version(CLI_VERSION)
   .option("--no-color", "disable colored output (also: NO_COLOR, CI, non-TTY)")
@@ -41,11 +41,11 @@ program.hook("preSubcommand", () => {
   // NO_COLOR (scrubbed before load — its native layer panics on it).
   const opts = program.opts<{ color?: boolean; quiet?: boolean }>();
   if (opts.color === false || process.env.CI || "NO_COLOR" in process.env) chalk.level = 0;
-  if (opts.quiet) process.env.DITTO_QUIET = "1";
+  if (opts.quiet) process.env.DITTOSH_QUIET = "1";
 });
 
 // After a successful command: the update banner (cached, non-blocking, stderr).
-// Opt-outs: --no-update-check, DITTO_NO_UPDATE_CHECK, CI, --quiet, piped/JSON.
+// Opt-outs: --no-update-check, DITTOSH_NO_UPDATE_CHECK, CI, --quiet, piped/JSON.
 // Skipped for system-group commands (version/update handle updates themselves)
 // and for help/version exits.
 let commandErrored = false;

@@ -159,7 +159,7 @@ describe("runStatement", () => {
   });
 
   it("warns once about SELECT without LIMIT when interactive, then persists the flag", async () => {
-    process.env.DITTO_CONFIG_DIR = tmpDataDir("ditto-state-");
+    process.env.DITTOSH_CONFIG_DIR = tmpDataDir("ditto-state-");
     try {
       vi.resetModules();
       const opts: RunOptions = { ...baseOpts, interactive: true, format: "json" };
@@ -170,13 +170,13 @@ describe("runStatement", () => {
       await runStatement(fakeExecutor([{ _id: "1" }]), "SELECT * FROM movies", opts);
       expect(errSpy.mock.calls.flat().join("\n")).not.toContain("no LIMIT");
     } finally {
-      rmrf(process.env.DITTO_CONFIG_DIR);
-      delete process.env.DITTO_CONFIG_DIR;
+      rmrf(process.env.DITTOSH_CONFIG_DIR);
+      delete process.env.DITTOSH_CONFIG_DIR;
     }
   });
 
   it("never warns when LIMIT present, --max-rows explicit, or non-interactive", async () => {
-    process.env.DITTO_CONFIG_DIR = tmpDataDir("ditto-state-");
+    process.env.DITTOSH_CONFIG_DIR = tmpDataDir("ditto-state-");
     try {
       const withLimit = await runStatement(fakeExecutor([]), "SELECT * FROM movies LIMIT 5", {
         ...baseOpts,
@@ -195,8 +195,8 @@ describe("runStatement", () => {
       expect(piped.ok).toBe(true);
       expect(errSpy.mock.calls.flat().join("\n")).not.toContain("no LIMIT");
     } finally {
-      rmrf(process.env.DITTO_CONFIG_DIR);
-      delete process.env.DITTO_CONFIG_DIR;
+      rmrf(process.env.DITTOSH_CONFIG_DIR);
+      delete process.env.DITTOSH_CONFIG_DIR;
     }
   });
 });
@@ -381,7 +381,7 @@ describe("runStatement diagnostics (--time/--explain/--profile)", () => {
   });
 
   it("no-LIMIT warning does not fire when -o already exports everything", async () => {
-    process.env.DITTO_CONFIG_DIR = tmpDataDir("ditto-state-");
+    process.env.DITTOSH_CONFIG_DIR = tmpDataDir("ditto-state-");
     try {
       const dir = tmpDataDir("ditto-run-");
       const out = path.join(dir, "all.json");
@@ -393,14 +393,14 @@ describe("runStatement diagnostics (--time/--explain/--profile)", () => {
       expect(errSpy.mock.calls.flat().join("\n")).not.toContain("no LIMIT");
       rmrf(dir);
     } finally {
-      rmrf(process.env.DITTO_CONFIG_DIR);
-      delete process.env.DITTO_CONFIG_DIR;
+      rmrf(process.env.DITTOSH_CONFIG_DIR);
+      delete process.env.DITTOSH_CONFIG_DIR;
     }
   });
 
-  it("DITTO_QUIET=0/false does NOT silence notes (explicit values only)", async () => {
+  it("DITTOSH_QUIET=0/false does NOT silence notes (explicit values only)", async () => {
     const { executor } = profileExecutor([]);
-    process.env.DITTO_QUIET = "0";
+    process.env.DITTOSH_QUIET = "0";
     try {
       await runStatement(executor, "INSERT INTO movies DOCUMENTS ({'_id':'1'})", {
         ...baseOpts,
@@ -408,13 +408,13 @@ describe("runStatement diagnostics (--time/--explain/--profile)", () => {
       });
       expect(errSpy.mock.calls.flat().join(" ")).toContain("only SELECT statements");
     } finally {
-      delete process.env.DITTO_QUIET;
+      delete process.env.DITTOSH_QUIET;
     }
   });
 
-  it("--quiet suppresses dim notes (DITTO_QUIET)", async () => {
+  it("--quiet suppresses dim notes (DITTOSH_QUIET)", async () => {
     const { executor } = profileExecutor([]);
-    process.env.DITTO_QUIET = "1";
+    process.env.DITTOSH_QUIET = "1";
     try {
       await runStatement(executor, "INSERT INTO movies DOCUMENTS ({'_id':'1'})", {
         ...baseOpts,
@@ -422,7 +422,7 @@ describe("runStatement diagnostics (--time/--explain/--profile)", () => {
       });
       expect(errSpy.mock.calls.flat().join(" ")).not.toContain("only SELECT statements");
     } finally {
-      delete process.env.DITTO_QUIET;
+      delete process.env.DITTOSH_QUIET;
     }
   });
 

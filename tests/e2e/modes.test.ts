@@ -269,7 +269,7 @@ describe.skipIf(!hasDevCredentials)(`e2e: ditto dql input modes (${NO_CREDENTIAL
     }
   });
 
-  it("DITTO_DATA_DIR is honored when -d is absent", async () => {
+  it("DITTOSH_DATA_DIR is honored when -d is absent", async () => {
     const dir = tmpDataDir("ditto-e2e-env-");
     try {
       const r = (await execa(
@@ -281,7 +281,7 @@ describe.skipIf(!hasDevCredentials)(`e2e: ditto dql input modes (${NO_CREDENTIAL
           "dql",
           "INSERT INTO t DOCUMENTS ({'_id':'1'}) ON ID CONFLICT DO UPDATE",
         ],
-        { cwd: ROOT, reject: false, all: true, env: { DITTO_DATA_DIR: dir } },
+        { cwd: ROOT, reject: false, all: true, env: { DITTOSH_DATA_DIR: dir } },
       )) as unknown as RunResult;
       expect(r.exitCode).toBe(0);
       expect(fs.existsSync(path.join(dir, "__ditto_lock_file"))).toBe(true);

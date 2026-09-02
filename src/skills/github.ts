@@ -2,10 +2,10 @@ import fs from "node:fs";
 
 /**
  * GitHub fetch layer for agent skills. Source repo: getditto/agent-skills.
- * `GITHUB_TOKEN` (or `DITTO_GITHUB_TOKEN`) authenticates while the repo is
+ * `GITHUB_TOKEN` (or `DITTOSH_GITHUB_TOKEN`) authenticates while the repo is
  * private; on 401/404 we produce actionable guidance.
  *
- * Test seam: `DITTO_SKILLS_TARBALL=/path/to/repo.tar.gz` bypasses the network
+ * Test seam: `DITTOSH_SKILLS_TARBALL=/path/to/repo.tar.gz` bypasses the network
  * entirely (resolveRef → "fixture", fetchTarball reads the file from disk).
  */
 
@@ -23,21 +23,21 @@ export class SkillsFetchError extends Error {
 
 function headers(): Record<string, string> {
   const h: Record<string, string> = {
-    "User-Agent": "ditto-cli",
+    "User-Agent": "dittosh",
     Accept: "application/vnd.github+json",
   };
-  const token = process.env.GITHUB_TOKEN ?? process.env.DITTO_GITHUB_TOKEN;
+  const token = process.env.GITHUB_TOKEN ?? process.env.DITTOSH_GITHUB_TOKEN;
   if (token) h.Authorization = `Bearer ${token}`;
   return h;
 }
 
 const PRIVATE_GUIDANCE =
   `The ${REPO} repo is private (or unreachable). Until it goes public, set GITHUB_TOKEN ` +
-  `to a token with access, e.g.:  GITHUB_TOKEN=$(gh auth token) ditto skills add …`;
+  `to a token with access, e.g.:  GITHUB_TOKEN=$(gh auth token) dittosh skills add …`;
 
 /** Resolve the ref to fetch: latest release tag, falling back to `main`. */
 export async function resolveRef(fetchFn: typeof fetch = fetch): Promise<string> {
-  if (process.env.DITTO_SKILLS_TARBALL) return "fixture"; // test seam
+  if (process.env.DITTOSH_SKILLS_TARBALL) return "fixture"; // test seam
   const res = await fetchFn(`${API}/repos/${REPO}/releases/latest`, { headers: headers() });
   if (res.status === 404) {
     // No releases yet (or private without a token) — fall back to main.
@@ -55,13 +55,13 @@ export async function resolveRef(fetchFn: typeof fetch = fetch): Promise<string>
 
 /** Download the repo tarball for a ref. Returns the raw gzipped bytes. */
 export async function fetchTarball(ref: string, fetchFn: typeof fetch = fetch): Promise<Buffer> {
-  const seam = process.env.DITTO_SKILLS_TARBALL;
+  const seam = process.env.DITTOSH_SKILLS_TARBALL;
   if (seam) {
     try {
       return fs.readFileSync(seam);
     } catch (err) {
       throw new SkillsFetchError(
-        `DITTO_SKILLS_TARBALL unreadable: ${seam} (${(err as Error).message})`,
+        `DITTOSH_SKILLS_TARBALL unreadable: ${seam} (${(err as Error).message})`,
       );
     }
   }
