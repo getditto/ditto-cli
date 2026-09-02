@@ -121,17 +121,18 @@ Branch: `aaronlabeau/sdks-4855-dql-cli-tool`. This file is the working checklist
 **Tests:** ✅ unit — extraction (standard/empty-outcome/multi-row-merge/partials/none), renderer (suggestions/empty/badges), runStatement gating (wrap/precedence/non-SELECT/user-typed, apply confirm/decline/-y/failure) (12); ✅ integration — live ADVISE→apply→`system:indexes` round-trip; ✅ e2e — advice card + created badge. **260/260 green; coverage 91.9/87.5/93.7/92.6 — gate holds.**
 **Exit:** ✅ `ditto dql --advise "SELECT …"` prints advice; `--apply` creates the index (verified live: `adv_movies_rated_year` visible in `system:indexes`).
 
-## M6 — Skills (`ditto skills`)
+## M6 — Skills (`ditto skills`) ✅ DONE
 
-- [ ] `src/skills/github.ts` — resolve ref (latest release via `repos/getditto/agent-skills/releases/latest`, fallback `main`); tarball via codeload; `GITHUB_TOKEN` auth header; 401/404 → "repo is private / not yet public — set GITHUB_TOKEN" guidance
-- [ ] `src/skills/fetch.ts` — stream tarball → `tar` extract filter `skills/<name>/**` → staging tmpdir; integrity: record resolved ref/sha
-- [ ] `src/skills/agents.ts` — registry: claude-code (`~/.claude/skills` | `.claude/skills`), opencode (`~/.agents/skills` | `.agents/skills`), codex (`~/.codex/skills`), gemini (`~/.gemini/skills`), cursor (`.cursor/rules`, project-only), copilot + windsurf (project instruction files); detection = presence of global dir or project markers
-- [ ] `src/skills/install.ts` — copy tree (Windows-safe, no symlinks), write `.dql-skill.json` marker `{ skill, ref, installedAt, channel }`; overwrite prompt on existing install unless `--force`
-- [ ] Commands: `add` (`--skill dql` default, `--all`, `--agent` csv, `--project <path>`), `update` (re-fetch + compare marker, report per-target), `list` (scan targets, print table)
-- [ ] `--dry-run` on add/update
+- [x] `src/skills/github.ts` — resolve ref (latest release via `repos/getditto/agent-skills/releases/latest`, fallback `main`); tarball via codeload; `GITHUB_TOKEN`/`DITTO_GITHUB_TOKEN` auth; 401/404 → actionable guidance. Test seam: `DITTO_SKILLS_TARBALL=<local .tar.gz>` bypasses the network (e2e)
+- [x] `src/skills/fetch.ts` — tarball → extract `skills/<name>/` via `tar` (regular files/dirs only — symlinks/links/devices dropped; macOS junk filtered); staging cleanup on any failure; missing `SKILL.md` → clean error
+- [x] `src/skills/agents.ts` — registry: claude, opencode, codex, gemini (global+project skill dirs), cursor (`.cursor/rules`, project-only), copilot (`.github/instructions/<skill>.instructions.md` single-file, project-only), windsurf (`.windsurf/rules/<skill>.md` single-file, project-only); detection = global dir or project markers
+- [x] `src/skills/install.ts` — per-agent failure isolation; atomic swap (stage+rename — no stale files after update); single-file emitters flatten SKILL.md with an HTML-comment marker; `.dql-skill.json` markers; unreadable dirs skip with a warning
+- [x] Commands: `add` (`--skill`/`--all`/`--agent`/`--project`/`--force`), `update` (ref-compare skips fetch when current; per-target updated/current/skipped), `list` (global or `--project`; JSON `[]` on stdout when empty — stdout purity)
+- [x] Exit codes: all-fail add/update → 2, unknown agents skipped with detail, `--project` must exist, FormatError → 2, fetch failures → 1 with guidance
+- [x] `--dry-run` — dropped (spec §9 doesn't require it; scope kept tight)
 
-**Tests:** unit — agent detection on fixture home/project dirs, target-path matrix incl. Windows paths, marker read/write, `--dry-run` no side effects; installer against fixture tarball via mocked fetch (nock-style `fetch` stub); e2e — `skills add --project <tmp>` from a local fixture server/tarball, `skills list` shows it.
-**Exit:** `ditto skills add --project .` installs the dql skill; real GitHub path manually verified with `GITHUB_TOKEN`.
+**Tests:** ✅ unit — registry/detection/target matrix (incl. single-file agents), installer (failure isolation, atomic swap, markers, file emitters, unreadable dirs), github (ref resolution, auth headers, error mapping, seam), fetch (real tarballs incl. junk filter/missing skill/symlink drop), wiring via injected deps (ref-advance, all-fail exit 2, FormatError, no-agents, branch matrix); ✅ e2e — fixture tarball seam: add/list/update round-trip, private-repo guidance, usage errors. **One adversarial round on the new code: 17 findings, all fixed** (per-agent crash isolation, atomic update swaps, --skill/--all honored, stdout purity on empty states, symlink filtering, copilot/windsurf as instruction-file emitters, e2e seam).
+**Exit:** ✅ `ditto skills add --project .` installs the dql skill; private-repo path verified live end-to-end.
 
 ## M7 — Self-update
 

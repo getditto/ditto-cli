@@ -2,6 +2,7 @@ import chalk from "chalk";
 import { Command, CommanderError } from "commander";
 import { rewriteDefaultSubcommand } from "./default-command.js";
 import { registerDqlGroup } from "./groups/dql/index.js";
+import { registerSkillsGroup } from "./groups/skills/index.js";
 import { installStdoutGuard } from "./streams.js";
 import { CLI_VERSION } from "./version.js";
 
@@ -24,6 +25,9 @@ program
 
 const dql = program.command("dql");
 registerDqlGroup(dql);
+
+const skills = program.command("skills");
+registerSkillsGroup(skills);
 
 // Global flags take effect before any subcommand action runs.
 program.hook("preSubcommand", () => {

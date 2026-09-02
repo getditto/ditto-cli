@@ -102,9 +102,21 @@ ditto dql dataset reset retail --yes            # evict the dataset's collection
 
 `--no-color`, `--quiet` (suppress informational notes), `--no-update-check` (planned; update flow lands in a later milestone).
 
+### `ditto skills` — install the DQL agent skill for AI coding agents
+
+```bash
+ditto skills add                    # install the dql skill into all detected agents (global)
+ditto skills add --project .        # project-local install
+ditto skills add --agent claude,opencode   # specific agents
+ditto skills list                   # what's installed where (with upstream ref)
+ditto skills update                 # refresh installed skills from the latest upstream release
+```
+
+Mirrors the Android CLI's `android skills add` semantics: default skill is `dql`, global scope unless `--project <path>`, all detected agents unless `--agent <list>`. Targets: Claude Code (`~/.claude/skills/dql` or `.claude/skills/dql`), OpenCode (`~/.agents/skills/dql` or `.agents/skills/dql`), Codex (`~/.codex/skills/dql`), Gemini (`~/.gemini/skills/dql`), Cursor (`.cursor/rules/dql`, project-only), Copilot + Windsurf (project instruction files). While `getditto/agent-skills` is private, set `GITHUB_TOKEN` (e.g. `GITHUB_TOKEN=$(gh auth token)`).
+
 ### Planned for later milestones
 
-`ditto skills add|update|list` (install the DQL agent skill for Claude Code, OpenCode, Codex, Gemini, Cursor, Copilot, Windsurf — global or project-local), `ditto version`, `ditto update`.
+`ditto version`, `ditto update` (self-update banner + channel-aware upgrade).
 
 ## Data directory
 
