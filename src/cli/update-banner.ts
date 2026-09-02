@@ -1,5 +1,12 @@
 import chalk from "chalk";
-import { checkForUpdate, isNewer, readCachedUpdate, updateCheckAllowed } from "../update/check.js";
+import {
+  cacheFresh,
+  checkForUpdate,
+  isNewer,
+  readCachedUpdate,
+  updateCheckAllowed,
+  writeFailureCache,
+} from "../update/check.js";
 
 /**
  * The update banner: one line on stderr after a successful command, only when
@@ -22,14 +29,13 @@ export async function maybeShowUpdateBanner(
     );
   }
 
-  // Background refresh when stale (never blocks output; capped at 1s).
-  if (!cached || !checkFreshEnough(cached)) {
-    void checkForUpdate(current, { force: true, fetchFn: fetchWithTimeout }).catch(() => {});
+  // Background refresh when stale (never blocks output; ≤1s cap). Failures
+  // back off too (a failure-stamped cache suppresses re-fetching for the TTL).
+  if (!cached || !cacheFresh(cached)) {
+    void checkForUpdate(current, { force: true, fetchFn: fetchWithTimeout }).catch(() => {
+      writeFailureCache(current);
+    });
   }
-}
-
-function checkFreshEnough(cache: { checkedAt: number }): boolean {
-  return Date.now() - cache.checkedAt < 24 * 60 * 60 * 1000;
 }
 
 const fetchWithTimeout: typeof fetch = (input, init) =>

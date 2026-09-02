@@ -9,11 +9,30 @@ export type StatementKind =
   | "ddl"
   | "other";
 
-const FIRST_WORD = /^\s*(?:--[^\n]*\n|\/\*[\s\S]*?\*\/|\s)*([a-zA-Z]+)/;
+/** Strip leading whitespace and comments (loop-based — no backtracking regex). */
+function stripLeadingTrivia(s: string): string {
+  let rest = s;
+  for (;;) {
+    const trimmed = rest.replace(/^\s+/, "");
+    if (trimmed.startsWith("--")) {
+      const nl = trimmed.indexOf("\n");
+      if (nl === -1) return "";
+      rest = trimmed.slice(nl + 1);
+      continue;
+    }
+    if (trimmed.startsWith("/*")) {
+      const end = trimmed.indexOf("*/");
+      if (end === -1) return trimmed;
+      rest = trimmed.slice(end + 2);
+      continue;
+    }
+    return trimmed;
+  }
+}
 
 /** Classify a DQL statement by its first meaningful keyword. */
 export function classify(statement: string): StatementKind {
-  const word = FIRST_WORD.exec(statement)?.[1]?.toUpperCase();
+  const word = /^([a-zA-Z]+)/.exec(stripLeadingTrivia(statement))?.[1]?.toUpperCase();
   switch (word) {
     case "SELECT":
       return "select";

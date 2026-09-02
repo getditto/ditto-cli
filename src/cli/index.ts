@@ -44,12 +44,21 @@ program.hook("preSubcommand", () => {
   if (opts.quiet) process.env.DITTO_QUIET = "1";
 });
 
+// After a successful command: the update banner (cached, non-blocking, stderr).
+// Opt-outs: --no-update-check, DITTO_NO_UPDATE_CHECK, CI, --quiet, piped/JSON.
+// Skipped for system-group commands (version/update handle updates themselves)
+// and for help/version exits.
+let commandErrored = false;
+let usedSystemCommand = false;
 try {
+  const argv = process.argv.slice(2);
+  usedSystemCommand = argv.some((a) => a === "version" || a === "update" || a === "help");
   await program.parseAsync([
     ...process.argv.slice(0, 2),
     ...rewriteDefaultSubcommand(process.argv.slice(2)),
   ]);
 } catch (err) {
+  commandErrored = true;
   if (err instanceof CommanderError) {
     // commander sets exitCode 0 for help/version (both the --help option AND
     // the `help` command), 1 for usage errors — map usage to 2.
@@ -60,11 +69,10 @@ try {
   }
 }
 
-// After a successful command: the update banner (cached, non-blocking, stderr).
-// Opt-outs: --no-update-check, DITTO_NO_UPDATE_CHECK, CI, --quiet, piped/JSON.
-if (!process.exitCode) {
+if (!process.exitCode && !commandErrored && !usedSystemCommand) {
   await maybeShowUpdateBanner(CLI_VERSION, {
-    noCheckFlag: program.opts<{ noUpdateCheck?: boolean }>().noUpdateCheck,
+    // commander stores --no-update-check under the POSITIVE name (updateCheck === false)
+    noCheckFlag: program.opts<{ updateCheck?: boolean }>().updateCheck === false,
     quiet: program.opts<{ quiet?: boolean }>().quiet,
   });
 }

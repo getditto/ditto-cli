@@ -51,7 +51,9 @@ export function detectChannel(
   ].filter(Boolean) as string[];
   if (
     npmRoots.some((r) => resolved.startsWith(r)) ||
-    resolved.includes("node_modules/@dittolive/cli")
+    // only the *global* layout counts — npx caches (_npx/<hash>/node_modules)
+    // and project-local devDeps must not be claimed as "npm global"
+    resolved.includes("/lib/node_modules/@dittolive/cli")
   ) {
     return {
       channel: "npm",

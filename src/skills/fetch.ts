@@ -19,7 +19,8 @@ export async function extractSkill(tarball: Buffer, skillName: string): Promise<
     fs.writeFileSync(tgz, tarball);
 
     fs.mkdirSync(out, { recursive: true });
-    const prefix = new RegExp(`^[^/]+/skills/${skillName}/`); // <root>/skills/<name>/
+    // String prefix matching, not a regex — skillName never interpolates into a pattern.
+    const prefix = `skills/${skillName}/`;
     await tar.x({
       file: tgz,
       cwd: out,
@@ -28,7 +29,8 @@ export async function extractSkill(tarball: Buffer, skillName: string): Promise<
         if (entryType !== "File" && entryType !== "Directory") return false; // no symlinks/links/devices
         const base = path.posix.basename(p);
         if (base.startsWith("._") || base === ".DS_Store") return false; // macOS metadata junk
-        return prefix.test(p) && p.replace(prefix, "") !== "";
+        const rel = p.replace(/^[^/]+\//, ""); // strip <owner>-<repo>-<sha>/
+        return rel.startsWith(prefix) && rel.length > prefix.length;
       },
       strip: 3, // <root>/skills/<name>/ → skill root
     });

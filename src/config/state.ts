@@ -36,12 +36,20 @@ export function writeState(patch: CliState): CliState {
     const tmp = `${stateFile()}.${process.pid}.tmp`;
     fs.writeFileSync(tmp, `${JSON.stringify(next, null, 2)}\n`, "utf8");
     fs.renameSync(tmp, stateFile());
-    // Sweep orphaned tmp files from crashed writers (pid-namespaced).
+    // Sweep orphaned tmp files from crashed writers — but only ones older
+    // than a minute (a live process's in-flight tmp must not be deleted).
     try {
       const base = path.basename(stateFile());
+      const cutoff = Date.now() - 60_000;
       for (const f of fs.readdirSync(configDir())) {
         if (f.startsWith(`${base}.`) && f.endsWith(".tmp")) {
-          fs.rmSync(path.join(configDir(), f), { force: true });
+          try {
+            if (fs.statSync(path.join(configDir(), f)).mtimeMs < cutoff) {
+              fs.rmSync(path.join(configDir(), f), { force: true });
+            }
+          } catch {
+            // gone already — fine
+          }
         }
       }
     } catch {

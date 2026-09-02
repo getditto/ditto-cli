@@ -134,16 +134,23 @@ Branch: `aaronlabeau/sdks-4855-dql-cli-tool`. This file is the working checklist
 **Tests:** ✅ unit — registry/detection/target matrix (incl. single-file agents), installer (failure isolation, atomic swap, markers, file emitters, unreadable dirs), github (ref resolution, auth headers, error mapping, seam), fetch (real tarballs incl. junk filter/missing skill/symlink drop), wiring via injected deps (ref-advance, all-fail exit 2, FormatError, no-agents, branch matrix); ✅ e2e — fixture tarball seam: add/list/update round-trip, private-repo guidance, usage errors. **One adversarial round on the new code: 17 findings, all fixed** (per-agent crash isolation, atomic update swaps, --skill/--all honored, stdout purity on empty states, symlink filtering, copilot/windsurf as instruction-file emitters, e2e seam).
 **Exit:** ✅ `ditto skills add --project .` installs the dql skill; private-repo path verified live end-to-end.
 
-## M7 — Self-update
+## M7 — Self-update ✅ DONE
 
-- [ ] `src/update/check.ts` — registry `latest` for `@dittolive/cli`; cache `{ checkedAt, latest }` in config dir, 24h TTL; failures silent; opt-outs: `CI`, `DITTO_NO_UPDATE_CHECK`, `--no-update-check`, non-TTY, `--format json`
-- [ ] `src/update/banner.ts` — one-line notice after command output (stderr), box style consistent with render layer
-- [ ] `src/update/channel.ts` — channel detection: realpath of argv entry under Homebrew Cellar/`brew --prefix` → `brew`; under `npm prefix -g` → `npm`; else `unknown`
-- [ ] `src/cli/groups/system/update.ts` — dispatch `brew update && brew upgrade ditto` | `npm i -g @dittolive/cli@latest` (spawn, inherit stdio); `unknown` → print both manual commands; never self-elevate
-- [ ] `ditto version` — version, channel, token expiry, data dir, platform/arch, Node version
+- [x] `src/update/check.ts` — registry `latest` for `@dittolive/cli`; cache `{ checkedAt, latest }` in state.json (atomic store), 24h TTL; failures silent; opt-outs: `CI`, `DITTO_NO_UPDATE_CHECK`, `--no-update-check`, non-TTY, `--quiet`, `--format json`
+- [x] `src/update/channel.ts` — channel detection: realpath of argv entry under Homebrew Cellar → `brew`; under npm global prefix/node_modules → `npm`; dev checkout/unknown → manual instructions, never self-elevate
+- [x] `src/cli/update-banner.ts` — one-line stderr banner from the cache only (instant, never blocks); stale cache refreshes in background (≤1s cap); never on stdout, never after a failing command
+- [x] `ditto version` — version, channel, token expiry, data dir, platform/arch, Node version (`--format json`)
+- [x] `ditto update` — `--check` reports only; runs the channel's upgrader (shell form for brew's `update && upgrade`); unknown channel → manual instructions; failures exit 1
 
-**Tests:** unit — cache TTL/etag-ish logic, semver compare, all opt-out paths, channel detection from fixture paths, banner suppression matrix; e2e — `version` fields, banner absent in JSON mode (stub registry via env override for test).
-**Exit:** banner appears on simulated outdated install; `ditto update` dry-verified on both channels.
+**Tests:** ✅ unit — check (cache TTL/stale/corrupt, isNewer matrix incl. prereleases, all opt-outs incl. CI-env control), channel (brew/npm/dev/unknown fixture paths), banner (cache-driven, opt-outs), system wiring (version fields + json, update --check/run/fail/unknown-channel); e2e via the real binary (version fields, update --check 404 graceful).
+**Exit:** ✅ banner shows on simulated outdated install; `ditto update` dispatch verified on both channels (unit) + live 404 degradation (pre-publish).
+
+### CI hardening (landed with M7)
+- Node 22+ floor everywhere (Node 20 EOL April 2026): engines, matrix now 22/24, doctor check, docs
+- Coverage gate holds in both modes (with/without integration secrets): session.ts unit-covered via mocked dynamic SDK import; repl.ts excluded (pty/e2e-verified wiring)
+- `.gitattributes` eol=lf — Windows autocrlf lint failure fixed
+- Windows: chmod-based tests skip on win32; HOME+USERPROFILE tilde handling
+- CI green on main ✅
 
 ## M8 — Distribution & release
 

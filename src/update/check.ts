@@ -23,7 +23,7 @@ export interface UpdateStatus {
   fromCache: boolean;
 }
 
-export function readCachedUpdate(now = Date.now()): UpdateCheckCache | undefined {
+export function readCachedUpdate(): UpdateCheckCache | undefined {
   const cache = readState().updateCheck as UpdateCheckCache | undefined;
   if (!cache || typeof cache.latest !== "string" || typeof cache.checkedAt !== "number")
     return undefined;
@@ -33,6 +33,11 @@ export function readCachedUpdate(now = Date.now()): UpdateCheckCache | undefined
 /** Bump the cache without checking freshness (callers decide). */
 export function cacheUpdate(latest: string): void {
   writeState({ updateCheck: { checkedAt: Date.now(), latest } });
+}
+
+/** Record a failed check so we back off for the TTL instead of re-fetching every command. */
+export function writeFailureCache(current: string): void {
+  writeState({ updateCheck: { checkedAt: Date.now(), latest: current } });
 }
 
 export function cacheFresh(cache: UpdateCheckCache, now = Date.now()): boolean {
@@ -51,16 +56,28 @@ export async function fetchLatestVersion(fetchFn: typeof fetch = fetch): Promise
   return body.version;
 }
 
-/** Compare two semver-ish versions (numeric segments only; pre-release suffixes compare as older). */
+/** Compare two versions (semver-ish: v-prefix stripped; prerelease identifiers rank numeric < alphanumeric, any prerelease < release). */
 export function isNewer(current: string, latest: string): boolean {
-  const parse = (v: string) => v.split(/[.-]/).map((p) => (/^\d+$/.test(p) ? Number(p) : -1));
+  const parse = (v: string) =>
+    v
+      .replace(/^v/, "")
+      .split(/[.-]/)
+      .map((p) => (/^\d+$/.test(p) ? Number(p) : p));
   const a = parse(current);
   const b = parse(latest);
   for (let i = 0; i < Math.max(a.length, b.length); i++) {
     const x = a[i] ?? 0;
     const y = b[i] ?? 0;
-    if (y > x) return true;
-    if (y < x) return false;
+    if (typeof x === "number" && typeof y === "number") {
+      if (y > x) return true;
+      if (y < x) return false;
+    } else if (typeof x === "number" && typeof y === "string") {
+      return false; // latest carries a prerelease tag of the same base → older
+    } else if (typeof x === "string" && typeof y === "number") {
+      return true; // current is a prerelease, latest is the release → newer
+    } else if (x !== y) {
+      return String(y) > String(x); // alphanumeric prerelease: lexical
+    }
   }
   return false;
 }
@@ -74,7 +91,7 @@ export async function checkForUpdate(
   opts: { now?: number; fetchFn?: typeof fetch; force?: boolean } = {},
 ): Promise<UpdateStatus | undefined> {
   const now = opts.now ?? Date.now();
-  const cached = readCachedUpdate(now);
+  const cached = readCachedUpdate();
   if (cached && !opts.force && cacheFresh(cached, now)) {
     return {
       current,
@@ -92,10 +109,13 @@ export async function checkForUpdate(
 export function updateCheckAllowed(
   opts: { ci?: boolean; quiet?: boolean; jsonOut?: boolean; isTTY?: boolean } = {},
 ): boolean {
-  if (process.env.DITTO_NO_UPDATE_CHECK) return false;
-  if (opts.ci ?? process.env.CI) return false;
-  if (opts.quiet) return false;
-  if (opts.jsonOut) return false;
+  const noCheck = process.env.DITTO_NO_UPDATE_CHECK;
+  if (noCheck && noCheck !== "0" && noCheck !== "false") return false;
+  const ci = opts.ci ?? process.env.CI;
+  if (ci && ci !== "false" && ci !== "0") return false;
+  const quiet = opts.quiet ?? process.env.DITTO_QUIET;
+  if (quiet === true || quiet === "1" || quiet === "true") return false;
+  if (opts.jsonOut ?? process.env.DITTO_JSON_OUT === "1") return false;
   if (!(opts.isTTY ?? process.stderr.isTTY)) return false;
   return true;
 }

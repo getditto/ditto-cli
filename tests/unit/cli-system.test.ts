@@ -42,6 +42,7 @@ describe("ditto version", () => {
   it("prints version, channel, token expiry, data dir, platform, node", async () => {
     const program = buildProgram({
       checkForUpdate: async () => noUpdate,
+      readCachedUpdate: () => ({ checkedAt: Date.now(), latest: "0.1.0" }),
       detectChannel: () => ({
         channel: "npm",
         updateCommand: "npm i -g @dittolive/cli@latest",
@@ -75,6 +76,7 @@ describe("ditto version", () => {
   it("--format json emits a JSON object", async () => {
     const program = buildProgram({
       checkForUpdate: async () => noUpdate,
+      readCachedUpdate: () => undefined,
       detectChannel: () => ({ channel: "unknown", updateCommand: null, detail: "dev checkout" }),
       run: () => 0,
       env: {} as NodeJS.ProcessEnv,
@@ -86,17 +88,18 @@ describe("ditto version", () => {
     expect(parsed).toHaveProperty("token_expires");
   });
 
-  it("registry failure degrades gracefully", async () => {
+  it("no cache → never checked (version is offline)", async () => {
     const program = buildProgram({
       checkForUpdate: async () => {
         throw new Error("offline");
       },
+      readCachedUpdate: () => undefined,
       detectChannel: () => ({ channel: "unknown", updateCommand: null, detail: "dev checkout" }),
       run: () => 0,
       env: {} as NodeJS.ProcessEnv,
     });
     await program.parseAsync(["node", "ditto", "version"]);
-    expect(stdout()).toContain("registry unreachable");
+    expect(stdout()).toContain("never checked");
     expect(process.exitCode).toBeUndefined();
   });
 });
@@ -107,6 +110,7 @@ describe("ditto update", () => {
   it("no update available → friendly message, exit 0", async () => {
     const program = buildProgram({
       checkForUpdate: async () => noUpdate,
+      readCachedUpdate: () => undefined,
       detectChannel: () => ({
         channel: "npm",
         updateCommand: "npm i -g @dittolive/cli@latest",
@@ -123,6 +127,7 @@ describe("ditto update", () => {
     const run = vi.fn(() => 0);
     const program = buildProgram({
       checkForUpdate: async () => newer,
+      readCachedUpdate: () => undefined,
       detectChannel: () => ({
         channel: "homebrew",
         updateCommand: "brew update && brew upgrade ditto",
@@ -140,6 +145,7 @@ describe("ditto update", () => {
     const run = vi.fn(() => 0);
     const program = buildProgram({
       checkForUpdate: async () => newer,
+      readCachedUpdate: () => undefined,
       detectChannel: () => ({
         channel: "npm",
         updateCommand: "npm i -g @dittolive/cli@latest",
@@ -156,6 +162,7 @@ describe("ditto update", () => {
     const run = vi.fn(() => 0);
     const program = buildProgram({
       checkForUpdate: async () => newer,
+      readCachedUpdate: () => undefined,
       detectChannel: () => ({ channel: "unknown", updateCommand: null, detail: "unknown" }),
       run,
     });
@@ -170,6 +177,7 @@ describe("ditto update", () => {
     const run = vi.fn(() => 1);
     const program = buildProgram({
       checkForUpdate: async () => newer,
+      readCachedUpdate: () => undefined,
       detectChannel: () => ({
         channel: "npm",
         updateCommand: "npm i -g @dittolive/cli@latest",
@@ -187,6 +195,7 @@ describe("ditto update", () => {
       checkForUpdate: async () => {
         throw new Error("offline");
       },
+      readCachedUpdate: () => undefined,
       detectChannel: () => ({
         channel: "npm",
         updateCommand: "npm i -g @dittolive/cli@latest",

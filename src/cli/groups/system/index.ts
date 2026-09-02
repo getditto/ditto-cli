@@ -4,13 +4,14 @@ import type { Command } from "commander";
 import { resolveDataDir } from "../../../config/paths.js";
 import { daysUntilExpiry, loadIdentity } from "../../../identity/token.js";
 import { detectChannel } from "../../../update/channel.js";
-import { checkForUpdate } from "../../../update/check.js";
+import { checkForUpdate, isNewer, readCachedUpdate } from "../../../update/check.js";
 import { CLI_VERSION } from "../../version.js";
 
 /** Injectable so tests don't hit the registry or spawn anything. */
 export interface SystemDeps {
   checkForUpdate: typeof checkForUpdate;
   detectChannel: typeof detectChannel;
+  readCachedUpdate: typeof readCachedUpdate;
   run: (cmdline: string) => number; // returns the child's exit code
   env?: NodeJS.ProcessEnv;
 }
@@ -18,6 +19,7 @@ export interface SystemDeps {
 const realDeps: SystemDeps = {
   checkForUpdate,
   detectChannel,
+  readCachedUpdate,
   // Runs a full command line through the shell (brew's `update && upgrade` form).
   run: (cmdline) => spawnSync(cmdline, { stdio: "inherit", shell: true }).status ?? 1,
 };
@@ -28,17 +30,19 @@ export function registerSystemGroup(program: Command, deps: SystemDeps = realDep
     .description("Show version, install channel, token expiry, and paths")
     .option("--format <format>", "text | json")
     .action(async (opts: { format?: string }) => {
+      if (opts.format !== undefined && opts.format !== "text" && opts.format !== "json") {
+        console.error(chalk.red(`--format must be one of text, json — got "${opts.format}"`));
+        process.exitCode = 2;
+        return;
+      }
       const channel = deps.detectChannel();
-      let updateLine = "unknown (check skipped)";
-      try {
-        const status = await deps.checkForUpdate(CLI_VERSION);
-        updateLine = status
-          ? status.updateAvailable
-            ? `${status.latest} available (current ${status.current}) — run: ditto update`
-            : `up to date (${status.current})`
-          : "unknown";
-      } catch {
-        updateLine = "unknown (registry unreachable)";
+      // Version never hits the network — the update line comes from the cache.
+      let updateLine = "unknown (never checked)";
+      const cached = deps.readCachedUpdate();
+      if (cached) {
+        updateLine = isNewer(CLI_VERSION, cached.latest)
+          ? `${cached.latest} available (current ${CLI_VERSION}) — run: ditto update`
+          : `up to date (${CLI_VERSION})`;
       }
 
       let expiry = "unknown";

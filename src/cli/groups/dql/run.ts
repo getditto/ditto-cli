@@ -223,6 +223,8 @@ export async function runStatement(
   // result sets); an explicit --max-rows still caps them.
   const rowsForFile = opts.maxRowsExplicit ? shown : rows;
   const format = opts.out ? formatForOutFile(opts.out, opts.format) : resolveFormat(opts.format);
+  if (format === "json") process.env.DITTO_JSON_OUT = "1"; // the update banner never appears in JSON mode
+  if (format === "json") process.env.DITTO_JSON_OUT = "1"; // the update banner never appears in JSON mode
 
   if (opts.out) {
     // Files never get ANSI escapes, even when the terminal is colored.

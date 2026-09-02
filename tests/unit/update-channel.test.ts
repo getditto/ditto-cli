@@ -30,13 +30,19 @@ describe("detectChannel", () => {
     expect(c.updateCommand).toBe("npm i -g @dittolive/cli@latest");
   });
 
-  it("npm: any path under node_modules/@dittolive/cli counts", () => {
-    const c = detectChannel({
-      argv1: "/custom/prefix/node_modules/@dittolive/cli/dist/cli.js",
+  it("npx cache and project-local devDeps are NOT claimed as npm global", () => {
+    const npx = detectChannel({
+      argv1: "/home/u/.npm/_npx/abc123/node_modules/@dittolive/cli/dist/cli.js",
       brewPrefix: "/opt/homebrew",
       npmPrefix: "/usr/local",
     });
-    expect(c.channel).toBe("npm");
+    expect(npx.channel).toBe("unknown"); // running it via npx ≠ installed globally
+    const proj = detectChannel({
+      argv1: "/work/myapp/node_modules/@dittolive/cli/dist/cli.js",
+      brewPrefix: "/opt/homebrew",
+      npmPrefix: "/usr/local",
+    });
+    expect(proj.channel).toBe("unknown");
   });
 
   it("dev checkout is unknown with no update command", () => {
