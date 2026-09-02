@@ -533,13 +533,13 @@ describe("ditto dql command wiring (mocked SDK boundary)", () => {
   });
 
   it("-d '' (empty) falls through to env; bogus env is still guarded", async () => {
-    process.env.DITTO_DATA_DIR = "--";
+    process.env.DITTOSH_DATA_DIR = "--";
     try {
       await buildProgram().parseAsync(["node", "ditto", "dql", "exec", "SELECT 1", "-d", ""]);
       expect(process.exitCode).toBe(2);
       expect(h.openedDataDir).toBeNull();
     } finally {
-      delete process.env.DITTO_DATA_DIR;
+      delete process.env.DITTOSH_DATA_DIR;
     }
   });
 
@@ -562,7 +562,7 @@ describe("ditto dql command wiring (mocked SDK boundary)", () => {
       dataDir,
     ]);
     expect(process.exitCode).toBe(4);
-    expect(stderr()).toContain("in use by another ditto process");
+    expect(stderr()).toContain("in use by another dittosh process");
   });
 
   it("collections runs system:collections", async () => {

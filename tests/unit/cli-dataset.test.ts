@@ -534,7 +534,7 @@ describe("ditto dql dataset wiring (mocked SDK boundary)", () => {
   });
 
   it("known-issue warnings survive --quiet (they're the only mitigation for an SDK hang)", async () => {
-    process.env.DITTO_QUIET = "1";
+    process.env.DITTOSH_QUIET = "1";
     try {
       await buildProgram().parseAsync([
         "node",
@@ -551,7 +551,7 @@ describe("ditto dql dataset wiring (mocked SDK boundary)", () => {
       expect(stderr()).toContain("known issue");
       expect(stderr()).not.toContain("Running"); // banner suppressed, warning not
     } finally {
-      delete process.env.DITTO_QUIET;
+      delete process.env.DITTOSH_QUIET;
     }
   });
 

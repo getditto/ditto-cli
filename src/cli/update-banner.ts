@@ -25,7 +25,7 @@ export async function maybeShowUpdateBanner(
   if (cached && isNewer(current, cached.latest)) {
     console.error(
       chalk.yellow(`update available: ${current} → ${cached.latest}`) +
-        chalk.dim("  (ditto update)"),
+        chalk.dim("  (dittosh update)"),
     );
   }
 

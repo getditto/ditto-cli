@@ -45,7 +45,7 @@ async function openSession(opts: ExecOpts): Promise<DittoSession | null> {
   // Bogus data-dir values (commander artifacts like `-d --`) fail fast for
   // EVERY store-opening command. Mirror resolveDataDir's fallthrough: an
   // empty/whitespace flag means the env var wins — check the EFFECTIVE value.
-  const rawDir = opts.dataDir?.trim() ? opts.dataDir : process.env.DITTO_DATA_DIR;
+  const rawDir = opts.dataDir?.trim() ? opts.dataDir : process.env.DITTOSH_DATA_DIR;
   if (isBogusDataDir(rawDir)) {
     console.error(chalk.red("-d/--data-dir requires a directory path"));
     process.exitCode = 2;
@@ -60,7 +60,7 @@ async function openSession(opts: ExecOpts): Promise<DittoSession | null> {
       if (days !== null && days < 0) {
         console.error(
           chalk.red(
-            `The embedded license token expired on ${identity.expiresOn}.\nUpdate the CLI: ditto update (or brew upgrade ditto / npm i -g @dittolive/cli@latest).`,
+            `The embedded license token expired on ${identity.expiresOn}.\nUpdate the CLI: dittosh update (or brew upgrade dittosh / npm i -g @dittolive/cli@latest).`,
           ),
         );
         process.exitCode = 3;
@@ -69,7 +69,7 @@ async function openSession(opts: ExecOpts): Promise<DittoSession | null> {
       if (days !== null && days < EXPIRY_NAG_DAYS) {
         console.error(
           chalk.yellow(
-            `note: the embedded license token expires ${identity.expiresOn} (${days}d left) — update soon: ditto update`,
+            `note: the embedded license token expires ${identity.expiresOn} (${days}d left) — update soon: dittosh update`,
           ),
         );
       }
@@ -196,7 +196,7 @@ export function registerDqlGroup(dql: ReturnType<Command["command"]>): void {
     });
 
   // Execution subcommand (also the default — see rewriteDefaultSubcommand in
-  // the CLI entry, which maps `ditto dql <stmt>` → `ditto dql exec <stmt>`;
+  // the CLI entry, which maps `dittosh dql <stmt>` → `dittosh dql exec <stmt>`;
   // an action directly on `dql` would swallow same-named child options).
   dql
     .command("exec")
@@ -288,7 +288,7 @@ export function registerDqlGroup(dql: ReturnType<Command["command"]>): void {
         } else if (isBlankOrComments(statement)) {
           console.error(
             chalk.red(
-              'No statement given (input was only whitespace/comments). Usage: ditto dql "SELECT ..."',
+              'No statement given (input was only whitespace/comments). Usage: dittosh dql "SELECT ..."',
             ),
           );
           process.exitCode = 2;
@@ -340,7 +340,7 @@ export function registerDqlGroup(dql: ReturnType<Command["command"]>): void {
       // REPL: no statement, no file, interactive terminal
       if (!statement && !opts.file && !stdinPiped) {
         if (!process.stdout.isTTY) {
-          console.error('No statement given. Usage: ditto dql "SELECT ..." (see --help)');
+          console.error('No statement given. Usage: dittosh dql "SELECT ..." (see --help)');
           process.exitCode = 2;
           return;
         }

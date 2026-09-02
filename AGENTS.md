@@ -1,8 +1,8 @@
-# AGENTS.md — `ditto` CLI (`@dittolive/cli`)
+# AGENTS.md — `dittosh` CLI (`@dittolive/cli`)
 
 ## What this is
 
-The Ditto CLI: an npm/Homebrew-installable TypeScript CLI (binary `ditto`) whose first command group, `ditto dql`, runs DQL statements against a local, offline-only Ditto store. Canonical spec: `plans/SDKS-4855-dql-cli-tool.md`. Working checklist: `plans/SDKS-4855-implementation-plan.md` (tick boxes as work lands).
+The Ditto CLI: an npm/Homebrew-installable TypeScript CLI (binary `dittosh` — renamed from `ditto` to avoid clashing with the macOS/Linux `ditto` tool) whose first command group, `dittosh dql`, runs DQL statements against a local, offline-only Ditto store. Canonical spec: `plans/SDKS-4855-dql-cli-tool.md`. Working checklist: `plans/SDKS-4855-implementation-plan.md` (tick boxes as work lands).
 
 ## Hard rules (from the spec — do not regress)
 
@@ -16,7 +16,7 @@ The Ditto CLI: an npm/Homebrew-installable TypeScript CLI (binary `ditto`) whose
 ## Layout
 
 - `src/cli/` — commander entry (`index.ts`), injected version (`version.ts`, tsup `define`), `groups/` per command group (`dql`, later `skills`, `system`)
-- `src/config/` — data-dir resolution (`--data-dir` > `DITTO_DATA_DIR` > OS default), config dir (`DITTO_CONFIG_DIR` > OS default; env-paths caches homedir at module load, so tests must use this override, not `$HOME`), persisted state (one-time warnings, update cache)
+- `src/config/` — data-dir resolution (`--data-dir` > `DITTOSH_DATA_DIR` > OS default), config dir (`DITTOSH_CONFIG_DIR` > OS default; env-paths caches homedir at module load, so tests must use this override, not `$HOME`), persisted state (one-time warnings, update cache)
 - `src/identity/` — token loading (dev env / release reassembly), expiry
 - `src/ditto/session.ts` — the only SDK touchpoint: init/open/close, log taming, lock mapping
 - `src/query/` — statement classifier, splitter, param binding, result extraction, row cap

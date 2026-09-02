@@ -40,7 +40,7 @@ export function renderAdvice(
   if (!applied) {
     lines.push("");
     lines.push(
-      chalk.dim('  apply with: ditto dql --advise --apply "<statement>" (prompts; -y skips)'),
+      chalk.dim('  apply with: dittosh dql --advise --apply "<statement>" (prompts; -y skips)'),
     );
   }
   return lines.join("\n");

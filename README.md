@@ -1,9 +1,9 @@
-# Ditto CLI
+# dittosh — the Ditto CLI
 
-The command-line tool for [Ditto](https://www.ditto.live) — run DQL statements against a local, offline-only Ditto store, load realistic sample datasets, and get rich diagnostics (timing, EXPLAIN, PROFILE, ADVISE) in your terminal.
+The command-line tool for [Ditto](https://www.ditto.live) — run DQL statements against a local, offline-only Ditto store, load realistic sample datasets, and get rich diagnostics (timing, EXPLAIN, PROFILE, ADVISE) in your terminal. The binary is `dittosh` (named to avoid clashing with the `ditto` tool shipped with macOS/Linux).
 
 ```
-$ ditto dql "SELECT _id.title, _id.year, rated FROM movies WHERE _id.year > '2000' LIMIT 3"
+$ dittosh dql "SELECT _id.title, _id.year, rated FROM movies WHERE _id.year > '2000' LIMIT 3"
 ┌─────────┬───────────────┬──────┐
 │ rated   │ title         │ year │
 ├─────────┼───────────────┼──────┤
@@ -17,11 +17,11 @@ $ ditto dql "SELECT _id.title, _id.year, rated FROM movies WHERE _id.year > '200
 ## Installation
 
 ```bash
-npm i -g @dittolive/cli        # npm (primary)
-brew install getditto/tap/ditto # Homebrew (macOS/Linux)
+npm i -g @dittolive/cli          # npm (primary)
+brew install getditto/tap/dittosh # Homebrew (macOS/Linux)
 ```
 
-The binary is `ditto`. Requires Node.js ≥ 20 for npm installs. Supported platforms (matching the Ditto Node SDK): **macOS arm64, Linux x64/arm64, Windows x64**. Intel Macs (darwin-x64) are not supported by SDK 5.1.0.
+The binary is `dittosh`. Requires Node.js ≥ 20 for npm installs. Supported platforms (matching the Ditto Node SDK): **macOS arm64, Linux x64/arm64, Windows x64**. Intel Macs (darwin-x64) are not supported by SDK 5.1.0.
 
 The CLI ships with a built-in offline license and runs entirely locally — no account, no credentials, no sync. `startSync()` is never called. All your data lives in one local directory (see [Data directory](#data-directory)).
 
@@ -29,33 +29,33 @@ The CLI ships with a built-in offline license and runs entirely locally — no a
 
 ```bash
 # check your install
-ditto dql doctor
+dittosh dql doctor
 
 # load a sample dataset
-ditto dql dataset load movies
+dittosh dql dataset load movies
 
 # query it
-ditto dql "SELECT _id.title, _id.year FROM movies WHERE _id.year > '2000' LIMIT 5"
+dittosh dql "SELECT _id.title, _id.year FROM movies WHERE _id.year > '2000' LIMIT 5"
 
 # or run a curated catalog query by name (prints the statement, then results)
-ditto dql dataset run single_result --dataset movies
+dittosh dql dataset run single_result --dataset movies
 
 # pipe results anywhere — stdout is always clean JSON when piped
-ditto dql "SELECT title FROM movies" | jq '.[].title'
+dittosh dql "SELECT title FROM movies" | jq '.[].title'
 ```
 
 ## Commands
 
-### `ditto dql` — run DQL
+### `dittosh dql` — run DQL
 
 All four input modes:
 
 ```bash
-ditto dql "SELECT * FROM movies WHERE year = 1994"   # one-shot (statement arg)
-ditto dql -e "SELECT * FROM movies LIMIT 5"          # explicit statement form
-ditto dql -f script.dql                              # run a file of statements
-echo "SELECT * FROM movies LIMIT 3;" | ditto dql     # piped stdin
-ditto dql                                            # interactive REPL
+dittosh dql "SELECT * FROM movies WHERE year = 1994"   # one-shot (statement arg)
+dittosh dql -e "SELECT * FROM movies LIMIT 5"          # explicit statement form
+dittosh dql -f script.dql                              # run a file of statements
+echo "SELECT * FROM movies LIMIT 3;" | dittosh dql     # piped stdin
+dittosh dql                                            # interactive REPL
 ```
 
 | Flag | Description |
@@ -76,24 +76,24 @@ ditto dql                                            # interactive REPL
 | `--apply` | apply ADVISE's suggested `CREATE INDEX` statements (prompts; `-y` skips) |
 | `-y, --yes` | skip confirmation prompts |
 
-### `ditto dql doctor`
+### `dittosh dql doctor`
 
 Platform/arch, Node version, data-directory writability, token validity + expiry, SDK load, and store-lock probe — with an exit code that says what's wrong.
 
-### `ditto dql collections` / `ditto dql indexes [collection]`
+### `dittosh dql collections` / `dittosh dql indexes [collection]`
 
 List collections (`system:collections`) and indexes (`system:indexes`).
 
-### `ditto dql dataset` — sample data
+### `dittosh dql dataset` — sample data
 
 Four built-in datasets vendored from Ditto's benchmark suites — movies, retail, retail-joins, pos — generated on the fly (nothing pre-generated ships in the package):
 
 ```bash
-ditto dql dataset list                          # available datasets
-ditto dql dataset show retail                   # shapes, setup indexes, full query catalog
-ditto dql dataset load retail --docs 5000       # generate + insert (progress on stderr)
-ditto dql dataset run stores__select__by_location_city --dataset retail
-ditto dql dataset reset retail --yes            # evict the dataset's collections
+dittosh dql dataset list                          # available datasets
+dittosh dql dataset show retail                   # shapes, setup indexes, full query catalog
+dittosh dql dataset load retail --docs 5000       # generate + insert (progress on stderr)
+dittosh dql dataset run stores__select__by_location_city --dataset retail
+dittosh dql dataset reset retail --yes            # evict the dataset's collections
 ```
 
 `dataset run` prints the resolved statement (on stderr, so stdout stays clean), then executes it. Query names resolve across datasets; ambiguous names list the matches. `--setup` applies the entry's index DDL first; write-category catalog queries require `--yes` and clean up after themselves. `--seed <n>` reproduces a dataset exactly; changing seeds adds new documents (reset first for a clean slate).
@@ -102,29 +102,29 @@ ditto dql dataset reset retail --yes            # evict the dataset's collection
 
 `--no-color`, `--quiet` (suppress informational notes), `--no-update-check` (planned; update flow lands in a later milestone).
 
-### `ditto skills` — install the DQL agent skill for AI coding agents
+### `dittosh skills` — install the DQL agent skill for AI coding agents
 
 ```bash
-ditto skills add                    # install the dql skill into all detected agents (global)
-ditto skills add --project .        # project-local install
-ditto skills add --agent claude,opencode   # specific agents
-ditto skills list                   # what's installed where (with upstream ref)
-ditto skills update                 # refresh installed skills from the latest upstream release
+dittosh skills add                    # install the dql skill into all detected agents (global)
+dittosh skills add --project .        # project-local install
+dittosh skills add --agent claude,opencode   # specific agents
+dittosh skills list                   # what's installed where (with upstream ref)
+dittosh skills update                 # refresh installed skills from the latest upstream release
 ```
 
 Mirrors the Android CLI's `android skills add` semantics: default skill is `dql`, global scope unless `--project <path>`, all detected agents unless `--agent <list>`. Targets: Claude Code (`~/.claude/skills/dql` or `.claude/skills/dql`), OpenCode (`~/.agents/skills/dql` or `.agents/skills/dql`), Codex (`~/.codex/skills/dql`), Gemini (`~/.gemini/skills/dql`), Cursor (`.cursor/rules/dql`, project-only), Copilot + Windsurf (project instruction files). While `getditto/agent-skills` is private, set `GITHUB_TOKEN` (e.g. `GITHUB_TOKEN=$(gh auth token)`).
 
 ### Planned for later milestones
 
-`ditto version`, `ditto update` (self-update banner + channel-aware upgrade).
+`dittosh version`, `dittosh update` (self-update banner + channel-aware upgrade).
 
 ## Data directory
 
-Resolution order: **`--data-dir` flag → `DITTO_DATA_DIR` env var → OS default** (`~/Library/Application Support/ditto` on macOS, `~/.local/share/ditto` on Linux, `%LOCALAPPDATA%\ditto` on Windows). One process at a time per directory (a second one gets a clear lock error, exit 4).
+Resolution order: **`--data-dir` flag → `DITTOSH_DATA_DIR` env var → OS default** (`~/Library/Application Support/dittosh` on macOS, `~/.local/share/dittosh` on Linux, `%LOCALAPPDATA%\dittosh` on Windows). One process at a time per directory (a second one gets a clear lock error, exit 4).
 
 ## Output & piping
 
-- **stdout is sacred**: query results are the only thing on stdout (JSON when piped). Warnings, progress, banners, and SDK logs all go to stderr — so `ditto dql "SELECT …" | jq …` always works.
+- **stdout is sacred**: query results are the only thing on stdout (JSON when piped). Warnings, progress, banners, and SDK logs all go to stderr — so `dittosh dql "SELECT …" | jq …` always works.
 - Diagnostics (`--profile`/`--explain`/`--advise`) render as rich UI on a TTY and route to stderr when piped, so they never corrupt a pipe.
 - Colors honor `NO_COLOR`, `CI`, `--no-color`, and non-TTY.
 - Attachments appear as `[attachment …]` placeholders (attachment bytes can't flow through DQL).
@@ -132,11 +132,11 @@ Resolution order: **`--data-dir` flag → `DITTO_DATA_DIR` env var → OS defaul
 ## Diagnostics
 
 ```bash
-ditto dql --time "SELECT …"      # timing footer
-ditto dql --explain "SELECT …"   # operator plan tree
-ditto dql --profile "SELECT …"   # execution profile: summary strip + operator tree + hotspots (▲ = ≥50% of exec time)
-ditto dql --advise "SELECT …"    # index suggestions + ready-to-run CREATE INDEX statements
-ditto dql --advise --apply -y "SELECT …"  # apply them
+dittosh dql --time "SELECT …"      # timing footer
+dittosh dql --explain "SELECT …"   # operator plan tree
+dittosh dql --profile "SELECT …"   # execution profile: summary strip + operator tree + hotspots (▲ = ≥50% of exec time)
+dittosh dql --advise "SELECT …"    # index suggestions + ready-to-run CREATE INDEX statements
+dittosh dql --advise --apply -y "SELECT …"  # apply them
 ```
 
 ## Exit codes
@@ -151,7 +151,7 @@ ditto dql --advise --apply -y "SELECT …"  # apply them
 
 ## REPL
 
-Bare `ditto dql` starts an interactive session: multi-line statements terminated with `;`, history, per-statement timing, dot-commands (`.help`, `.collections`, `.indexes [name]`, `.break`, `.exit`).
+Bare `dittosh dql` starts an interactive session: multi-line statements terminated with `;`, history, per-statement timing, dot-commands (`.help`, `.collections`, `.indexes [name]`, `.break`, `.exit`).
 
 ## Development
 

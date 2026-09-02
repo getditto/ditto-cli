@@ -59,7 +59,9 @@ export function registerDatasetCommands(
         scales_on: d.scalingDimension,
       }));
       console.log(renderRows(rows, format));
-      note("\n ditto dql dataset show <name> for details · ditto dql dataset load <name> to load");
+      note(
+        "\n dittosh dql dataset show <name> for details · dittosh dql dataset load <name> to load",
+      );
     });
 
   dataset
@@ -101,7 +103,7 @@ export function registerDatasetCommands(
       }
       console.log(chalk.bold("\nQuery catalog:"));
       printQueryCatalog(suite);
-      note(`\nRun one with: ditto dql dataset run <query-name> --dataset ${suite.name}`);
+      note(`\nRun one with: dittosh dql dataset run <query-name> --dataset ${suite.name}`);
     });
 
   dataset
@@ -217,7 +219,7 @@ export function registerDatasetCommands(
         if (!resolved) {
           const hint = opts.dataset ? ` in dataset "${opts.dataset}"` : "";
           console.error(
-            chalk.red(`Unknown query: ${queryName}${hint}. See: ditto dql dataset show <name>`),
+            chalk.red(`Unknown query: ${queryName}${hint}. See: dittosh dql dataset show <name>`),
           );
           process.exitCode = 2;
           return;

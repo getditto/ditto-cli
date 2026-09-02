@@ -5,14 +5,14 @@ import { detectChannel } from "../../src/update/channel.js";
 describe("detectChannel", () => {
   it("homebrew: resolved path under the Cellar", () => {
     const c = detectChannel({
-      argv1: "/opt/homebrew/bin/ditto",
+      argv1: "/opt/homebrew/bin/dittosh",
       brewPrefix: "/opt/homebrew",
       npmPrefix: "/usr/local",
     });
     // simulate realpath resolution to the Cellar
     expect(
       detectChannel({
-        argv1: "/opt/homebrew/Cellar/ditto/0.1.0/bin/ditto",
+        argv1: "/opt/homebrew/Cellar/dittosh/0.1.0/bin/dittosh",
         brewPrefix: "/opt/homebrew",
         npmPrefix: "/usr/local",
       }).channel,
@@ -58,7 +58,7 @@ describe("detectChannel", () => {
 
   it("truly unknown paths are unknown", () => {
     const c = detectChannel({
-      argv1: "/opt/custom/bin/ditto",
+      argv1: "/opt/custom/bin/dittosh",
       brewPrefix: "/opt/homebrew",
       npmPrefix: "/usr/local",
     });
@@ -68,7 +68,7 @@ describe("detectChannel", () => {
 
   it("missing brew/npm binaries degrade gracefully", () => {
     const c = detectChannel({
-      argv1: "/opt/custom/bin/ditto",
+      argv1: "/opt/custom/bin/dittosh",
       brewPrefix: undefined,
       npmPrefix: undefined,
     });

@@ -4,14 +4,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { rmrf, tmpDataDir } from "../helpers/credentials.js";
 
 // Point the config dir at an isolated location before importing the module
-// under test (env-paths caches homedir at module load, so DITTO_CONFIG_DIR is
+// under test (env-paths caches homedir at module load, so DITTOSH_CONFIG_DIR is
 // the reliable lever).
 let home: string;
 let state: typeof import("../../src/config/state.js");
 
 beforeEach(async () => {
   home = tmpDataDir("ditto-state-");
-  process.env.DITTO_CONFIG_DIR = home;
+  process.env.DITTOSH_CONFIG_DIR = home;
   vi.resetModules();
   state = await import("../../src/config/state.js");
 });

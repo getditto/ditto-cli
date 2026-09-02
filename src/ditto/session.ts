@@ -7,7 +7,7 @@ export class LockError extends Error {
   readonly exitCode = 4;
   constructor(dir: string) {
     super(
-      `The data directory is in use by another ditto process: ${dir}\n` +
+      `The data directory is in use by another dittosh process: ${dir}\n` +
         `Close the other process, or pass --data-dir to use a different directory.`,
     );
     this.name = "LockError";

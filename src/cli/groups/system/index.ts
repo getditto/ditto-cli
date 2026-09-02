@@ -41,7 +41,7 @@ export function registerSystemGroup(program: Command, deps: SystemDeps = realDep
       const cached = deps.readCachedUpdate();
       if (cached) {
         updateLine = isNewer(CLI_VERSION, cached.latest)
-          ? `${cached.latest} available (current ${CLI_VERSION}) — run: ditto update`
+          ? `${cached.latest} available (current ${CLI_VERSION}) — run: dittosh update`
           : `up to date (${CLI_VERSION})`;
       }
 
@@ -102,7 +102,7 @@ export function registerSystemGroup(program: Command, deps: SystemDeps = realDep
           console.error(chalk.dim(`upgrade with: ${channel.updateCommand}`));
         else
           console.error(
-            chalk.dim("upgrade manually: brew upgrade ditto  ·  npm i -g @dittolive/cli@latest"),
+            chalk.dim("upgrade manually: brew upgrade dittosh  ·  npm i -g @dittolive/cli@latest"),
           );
         return;
       }
@@ -110,7 +110,7 @@ export function registerSystemGroup(program: Command, deps: SystemDeps = realDep
         console.error(
           chalk.yellow(
             "Can't tell how this install was made. Upgrade manually:\n" +
-              "  brew update && brew upgrade ditto     # Homebrew\n" +
+              "  brew update && brew upgrade dittosh     # Homebrew\n" +
               "  npm i -g @dittolive/cli@latest        # npm",
           ),
         );

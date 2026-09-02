@@ -4,7 +4,7 @@ import { readState, writeState } from "../config/state.js";
  * Non-blocking update check against the npm registry for `@dittolive/cli`.
  * Result is cached in state.json with a 24h TTL; failures are silent.
  *
- * Opt-outs (checked by callers): CI, DITTO_NO_UPDATE_CHECK, --no-update-check,
+ * Opt-outs (checked by callers): CI, DITTOSH_NO_UPDATE_CHECK, --no-update-check,
  * non-TTY, --format json.
  */
 
@@ -109,13 +109,13 @@ export async function checkForUpdate(
 export function updateCheckAllowed(
   opts: { ci?: boolean; quiet?: boolean; jsonOut?: boolean; isTTY?: boolean } = {},
 ): boolean {
-  const noCheck = process.env.DITTO_NO_UPDATE_CHECK;
+  const noCheck = process.env.DITTOSH_NO_UPDATE_CHECK;
   if (noCheck && noCheck !== "0" && noCheck !== "false") return false;
   const ci = opts.ci ?? process.env.CI;
   if (ci && ci !== "false" && ci !== "0") return false;
-  const quiet = opts.quiet ?? process.env.DITTO_QUIET;
+  const quiet = opts.quiet ?? process.env.DITTOSH_QUIET;
   if (quiet === true || quiet === "1" || quiet === "true") return false;
-  if (opts.jsonOut ?? process.env.DITTO_JSON_OUT === "1") return false;
+  if (opts.jsonOut ?? process.env.DITTOSH_JSON_OUT === "1") return false;
   if (!(opts.isTTY ?? process.stderr.isTTY)) return false;
   return true;
 }

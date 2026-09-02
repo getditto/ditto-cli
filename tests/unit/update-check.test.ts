@@ -5,15 +5,15 @@ let state: typeof import("../../src/config/state.js");
 let check: typeof import("../../src/update/check.js");
 
 beforeEach(async () => {
-  process.env.DITTO_CONFIG_DIR = tmpDataDir("ditto-state-");
+  process.env.DITTOSH_CONFIG_DIR = tmpDataDir("ditto-state-");
   vi.resetModules();
   state = await import("../../src/config/state.js");
   check = await import("../../src/update/check.js");
 });
 
 afterEach(() => {
-  rmrf(process.env.DITTO_CONFIG_DIR!);
-  delete process.env.DITTO_CONFIG_DIR;
+  rmrf(process.env.DITTOSH_CONFIG_DIR!);
+  delete process.env.DITTOSH_CONFIG_DIR;
 });
 
 describe("update check", () => {
@@ -94,11 +94,11 @@ describe("updateCheckAllowed opt-outs", () => {
       expect(check!.updateCheckAllowed({ isTTY: true, quiet: true })).toBe(false);
       expect(check!.updateCheckAllowed({ isTTY: true, jsonOut: true })).toBe(false);
       expect(check!.updateCheckAllowed({ isTTY: true, ci: true })).toBe(false);
-      process.env.DITTO_NO_UPDATE_CHECK = "1";
+      process.env.DITTOSH_NO_UPDATE_CHECK = "1";
       try {
         expect(check!.updateCheckAllowed({ isTTY: true })).toBe(false);
       } finally {
-        delete process.env.DITTO_NO_UPDATE_CHECK;
+        delete process.env.DITTOSH_NO_UPDATE_CHECK;
       }
     } finally {
       if (hadCI !== undefined) process.env.CI = hadCI;

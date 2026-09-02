@@ -10,14 +10,14 @@ beforeEach(() => {
   outSpy = vi.spyOn(console, "log").mockImplementation(() => {});
   errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
   process.exitCode = undefined;
-  process.env.DITTO_CONFIG_DIR = tmpDataDir("ditto-state-");
+  process.env.DITTOSH_CONFIG_DIR = tmpDataDir("ditto-state-");
 });
 
 afterEach(() => {
   outSpy.mockRestore();
   errSpy.mockRestore();
-  rmrf(process.env.DITTO_CONFIG_DIR!);
-  delete process.env.DITTO_CONFIG_DIR;
+  rmrf(process.env.DITTOSH_CONFIG_DIR!);
+  delete process.env.DITTOSH_CONFIG_DIR;
 });
 
 const stdout = () => outSpy.mock.calls.flat().join("\n");
@@ -130,14 +130,14 @@ describe("ditto update", () => {
       readCachedUpdate: () => undefined,
       detectChannel: () => ({
         channel: "homebrew",
-        updateCommand: "brew update && brew upgrade ditto",
+        updateCommand: "brew update && brew upgrade dittosh",
         detail: "homebrew (/opt/homebrew)",
       }),
       run,
     });
     await program.parseAsync(["node", "ditto", "update", "--check"]);
     expect(stdout()).toContain("0.1.0 → 0.2.0");
-    expect(stderr()).toContain("brew update && brew upgrade ditto");
+    expect(stderr()).toContain("brew update && brew upgrade dittosh");
     expect(run).not.toHaveBeenCalled();
   });
 
@@ -168,7 +168,7 @@ describe("ditto update", () => {
     });
     await program.parseAsync(["node", "ditto", "update"]);
     expect(run).not.toHaveBeenCalled();
-    expect(stderr()).toContain("brew update && brew upgrade ditto");
+    expect(stderr()).toContain("brew update && brew upgrade dittosh");
     expect(stderr()).toContain("npm i -g @dittolive/cli@latest");
     expect(process.exitCode).toBe(1);
   });
