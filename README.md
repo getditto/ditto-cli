@@ -167,7 +167,6 @@ npm run build           # tsup → dist/cli.js
 ## Known issues
 
 - The Ditto SDK 5.1.0 prints ~7 lines of tracing noise to stderr at init (fd-level, not suppressible from JS) — cosmetic only; stdout stays clean.
-- The `retail-joins` catalog query `joins__left__products_inventory_stock_value` hangs SDK 5.1.0 when the `inv_store_flat` index exists (upstream; marked as a known issue in `dataset show`/`dataset run`). Workaround: run without `--setup`, or add `LIMIT`.
 - `SELECT * FROM system:collections` returns rows only on the first `execute` of a session (upstream; reported).
 - CSV output does not escape formula-injection characters (`=`, `+`, `@`) — don't feed it into Excel unsanitized.
 
