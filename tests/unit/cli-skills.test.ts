@@ -290,7 +290,8 @@ describe("ditto skills — branch matrix", () => {
     }
   });
 
-  it("update exits 2 when every reinstall fails", async () => {
+  // chmod-based read-only enforcement is posix-only
+  it.skipIf(process.platform === "win32")("update exits 2 when every reinstall fails", async () => {
     // install, then make the parent read+execute-only (555: listing/traversal OK, write blocked)
     fs.mkdirSync(path.join(home, ".claude", "skills"), { recursive: true });
     await (await buildCli(await skillTarball())).parseAsync([

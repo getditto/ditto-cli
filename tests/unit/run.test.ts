@@ -472,7 +472,10 @@ describe("runStatement diagnostics (--time/--explain/--profile)", () => {
 
   it("-o expands a leading tilde in the output path", async () => {
     const home = tmpDataDir("ditto-home-");
+    const hadHome = process.env.HOME;
+    const hadUserProfile = process.env.USERPROFILE;
     process.env.HOME = home;
+    process.env.USERPROFILE = home; // os.homedir() reads USERPROFILE on win32
     try {
       const r = await runStatement(fakeExecutor([{ _id: "1" }]), "SELECT * FROM movies", {
         ...baseOpts,
@@ -482,6 +485,10 @@ describe("runStatement diagnostics (--time/--explain/--profile)", () => {
       expect(fs.existsSync(path.join(home, "r6-out.json"))).toBe(true);
     } finally {
       rmrf(home);
+      if (hadHome === undefined) delete process.env.HOME;
+      else process.env.HOME = hadHome;
+      if (hadUserProfile === undefined) delete process.env.USERPROFILE;
+      else process.env.USERPROFILE = hadUserProfile;
     }
   });
 

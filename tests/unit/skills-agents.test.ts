@@ -177,23 +177,27 @@ describe("single-file agents (copilot/windsurf)", () => {
 });
 
 describe("installSkill — failure isolation and single-file emitters", () => {
-  it("a read-only target returns ok:false with the error (no crash)", () => {
-    const skill = tmpDataDir("ditto-skill-src-");
-    const home = tmpDataDir("ditto-home-");
-    try {
-      fs.writeFileSync(path.join(skill, "SKILL.md"), "# dql\n", "utf8");
-      const parent = path.join(home, ".claude", "skills");
-      fs.mkdirSync(parent, { recursive: true });
-      fs.chmodSync(parent, 0o444); // read-only
-      const r = installSkill(skill, "dql", getAgent("claude")!, "v1", { home });
-      expect(r.ok).toBe(false);
-      expect(r.detail).toBeTruthy();
-    } finally {
-      fs.chmodSync(path.join(home, ".claude", "skills"), 0o755);
-      rmrf(skill);
-      rmrf(home);
-    }
-  });
+  // chmod-based read-only enforcement is posix-only
+  it.skipIf(process.platform === "win32")(
+    "a read-only target returns ok:false with the error (no crash)",
+    () => {
+      const skill = tmpDataDir("ditto-skill-src-");
+      const home = tmpDataDir("ditto-home-");
+      try {
+        fs.writeFileSync(path.join(skill, "SKILL.md"), "# dql\n", "utf8");
+        const parent = path.join(home, ".claude", "skills");
+        fs.mkdirSync(parent, { recursive: true });
+        fs.chmodSync(parent, 0o444); // read-only
+        const r = installSkill(skill, "dql", getAgent("claude")!, "v1", { home });
+        expect(r.ok).toBe(false);
+        expect(r.detail).toBeTruthy();
+      } finally {
+        fs.chmodSync(path.join(home, ".claude", "skills"), 0o755);
+        rmrf(skill);
+        rmrf(home);
+      }
+    },
+  );
 
   it("copilot gets a single flattened instruction file with a marker comment", () => {
     const skill = tmpDataDir("ditto-skill-src-");
@@ -288,26 +292,30 @@ describe("installSkill — remaining branches", () => {
     }
   });
 
-  it("findInstalled skips unreadable dirs with a stderr warning (no crash)", () => {
-    const base = tmpDataDir("ditto-base-");
-    try {
-      const dir = path.join(base, "dql");
-      fs.mkdirSync(dir, { recursive: true });
-      fs.writeFileSync(path.join(dir, "SKILL.md"), "# dql\n", "utf8");
-      fs.chmodSync(base, 0o000); // nothing readable
-      const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+  // chmod-based read-only enforcement is posix-only
+  it.skipIf(process.platform === "win32")(
+    "findInstalled skips unreadable dirs with a stderr warning (no crash)",
+    () => {
+      const base = tmpDataDir("ditto-base-");
       try {
-        const found = findInstalled(base);
-        expect(found).toEqual([]);
-        expect(errSpy.mock.calls.flat().join(" ")).toContain("can't read");
+        const dir = path.join(base, "dql");
+        fs.mkdirSync(dir, { recursive: true });
+        fs.writeFileSync(path.join(dir, "SKILL.md"), "# dql\n", "utf8");
+        fs.chmodSync(base, 0o000); // nothing readable
+        const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+        try {
+          const found = findInstalled(base);
+          expect(found).toEqual([]);
+          expect(errSpy.mock.calls.flat().join(" ")).toContain("can't read");
+        } finally {
+          errSpy.mockRestore();
+          fs.chmodSync(base, 0o755);
+        }
       } finally {
-        errSpy.mockRestore();
-        fs.chmodSync(base, 0o755);
+        rmrf(base);
       }
-    } finally {
-      rmrf(base);
-    }
-  });
+    },
+  );
 
   it("findInstalled discovers single-file installs via their marker comment", () => {
     const base = tmpDataDir("ditto-base-");

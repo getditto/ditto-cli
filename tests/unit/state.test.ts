@@ -61,15 +61,19 @@ describe("state store", () => {
     expect(state.readState()).toEqual({});
   });
 
-  it("writeState never throws, even on a read-only config dir", () => {
-    state.writeState({ probe: 1 });
-    const file = walkForState(home)[0]!;
-    fs.chmodSync(home, 0o444);
-    try {
-      expect(() => state.writeState({ probe: 2 })).not.toThrow();
-    } finally {
-      fs.chmodSync(home, 0o755);
-    }
-    expect(fs.readFileSync(file, "utf8")).toContain('"probe": 1'); // unchanged
-  });
+  // chmod-based read-only enforcement is posix-only
+  it.skipIf(process.platform === "win32")(
+    "writeState never throws, even on a read-only config dir",
+    () => {
+      state.writeState({ probe: 1 });
+      const file = walkForState(home)[0]!;
+      fs.chmodSync(home, 0o444);
+      try {
+        expect(() => state.writeState({ probe: 2 })).not.toThrow();
+      } finally {
+        fs.chmodSync(home, 0o755);
+      }
+      expect(fs.readFileSync(file, "utf8")).toContain('"probe": 1'); // unchanged
+    },
+  );
 });
