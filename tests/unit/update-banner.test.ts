@@ -22,10 +22,16 @@ const stderr = () => errSpy.mock.calls.flat().join("\n");
 
 describe("update banner", () => {
   it("shows when the cache knows a newer version", async () => {
-    state.writeState({ updateCheck: { checkedAt: Date.now(), latest: "9.9.9" } });
-    await maybeShowUpdateBanner("1.0.0", { isTTY: true });
-    expect(stderr()).toContain("update available: 1.0.0 → 9.9.9");
-    expect(stderr()).toContain("ditto update");
+    const hadCI = process.env.CI;
+    delete process.env.CI; // GitHub Actions sets CI=true
+    try {
+      state.writeState({ updateCheck: { checkedAt: Date.now(), latest: "9.9.9" } });
+      await maybeShowUpdateBanner("1.0.0", { isTTY: true });
+      expect(stderr()).toContain("update available: 1.0.0 → 9.9.9");
+      expect(stderr()).toContain("ditto update");
+    } finally {
+      if (hadCI !== undefined) process.env.CI = hadCI;
+    }
   });
 
   it("is silent when current matches the cache", async () => {

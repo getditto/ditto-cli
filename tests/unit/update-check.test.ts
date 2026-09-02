@@ -85,16 +85,23 @@ describe("isNewer", () => {
 
 describe("updateCheckAllowed opt-outs", () => {
   it("respects every opt-out", () => {
-    expect(check!.updateCheckAllowed({ isTTY: true })).toBe(true);
-    expect(check!.updateCheckAllowed({ isTTY: false })).toBe(false);
-    expect(check!.updateCheckAllowed({ isTTY: true, quiet: true })).toBe(false);
-    expect(check!.updateCheckAllowed({ isTTY: true, jsonOut: true })).toBe(false);
-    expect(check!.updateCheckAllowed({ isTTY: true, ci: true })).toBe(false);
-    process.env.DITTO_NO_UPDATE_CHECK = "1";
+    // GitHub Actions sets CI=true — control it explicitly in this test
+    const hadCI = process.env.CI;
+    delete process.env.CI;
     try {
-      expect(check!.updateCheckAllowed({ isTTY: true })).toBe(false);
+      expect(check!.updateCheckAllowed({ isTTY: true })).toBe(true);
+      expect(check!.updateCheckAllowed({ isTTY: false })).toBe(false);
+      expect(check!.updateCheckAllowed({ isTTY: true, quiet: true })).toBe(false);
+      expect(check!.updateCheckAllowed({ isTTY: true, jsonOut: true })).toBe(false);
+      expect(check!.updateCheckAllowed({ isTTY: true, ci: true })).toBe(false);
+      process.env.DITTO_NO_UPDATE_CHECK = "1";
+      try {
+        expect(check!.updateCheckAllowed({ isTTY: true })).toBe(false);
+      } finally {
+        delete process.env.DITTO_NO_UPDATE_CHECK;
+      }
     } finally {
-      delete process.env.DITTO_NO_UPDATE_CHECK;
+      if (hadCI !== undefined) process.env.CI = hadCI;
     }
   });
 });
