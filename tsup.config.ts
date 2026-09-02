@@ -1,4 +1,5 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "tsup";
 
 const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8")) as {
@@ -7,6 +8,18 @@ const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), 
 
 // `RELEASE=true npm run build` stamps a release build (env credentials ignored).
 const release = process.env.RELEASE === "true";
+
+// Release builds swap the committed token-chunks stub for the generated,
+// gitignored build/token-chunks.ts (run `npm run stamp:token` first).
+const stampPath = fileURLToPath(new URL("./build/token-chunks.ts", import.meta.url));
+if (release) {
+  if (!existsSync(stampPath)) {
+    throw new Error("RELEASE build needs a stamped token — run `npm run stamp:token` first.");
+  }
+  if (!readFileSync(stampPath, "utf8").includes("STAMPED = true")) {
+    throw new Error("build/token-chunks.ts is not stamped — re-run `npm run stamp:token`.");
+  }
+}
 
 export default defineConfig({
   entry: { cli: "src/cli/index.ts" },
@@ -29,6 +42,16 @@ export default defineConfig({
     __CLI_VERSION__: JSON.stringify(pkg.version),
     RELEASE: JSON.stringify(release ? "true" : "false"),
   },
+  esbuildPlugins: release
+    ? [
+        {
+          name: "stamped-token",
+          setup(build) {
+            build.onResolve({ filter: /token-chunks\.stub\.js$/ }, () => ({ path: stampPath }));
+          },
+        },
+      ]
+    : [],
   clean: true,
   sourcemap: false,
   minify: false,

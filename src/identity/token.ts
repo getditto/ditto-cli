@@ -14,6 +14,11 @@
  * CI parity with the agent-skills repo.
  */
 
+import { unpack } from "./obfuscate.js";
+// In release builds tsup aliases this specifier to the generated
+// build/token-chunks.ts (scripts/stamp-token.ts); dev gets the stub.
+import { APP_ID, CHUNKS, EXPIRES_ON, SALT, STAMPED } from "./token-chunks.stub.js";
+
 // Overridden to `true` by the release build (tsup define). Do not reference
 // import.meta.env or process.env trickery here — this constant is the guard.
 declare const RELEASE: string | undefined;
@@ -40,12 +45,33 @@ export class IdentityError extends Error {
   }
 }
 
-export function loadIdentity(env: NodeJS.ProcessEnv = process.env): Identity {
-  if (isRelease) {
-    // TODO(M8): reassemble embedded token from build/token-chunks.ts.
+/** Shape of the stamped token module (build/token-chunks.ts or the dev stub). */
+export interface StampModule {
+  STAMPED: boolean;
+  APP_ID: string;
+  EXPIRES_ON: string;
+  SALT: string;
+  CHUNKS: string[];
+}
+
+/** Reassemble the embedded (release) identity from a stamped token module. */
+export function identityFromStamp(stamp: StampModule): Identity {
+  if (!stamp.STAMPED) {
     throw new IdentityError(
       "This build has no embedded license token. Release builds are stamped at publish time.",
     );
+  }
+  return {
+    appId: stamp.APP_ID,
+    token: unpack(stamp.CHUNKS, stamp.SALT),
+    expiresOn: stamp.EXPIRES_ON || undefined,
+    source: "embedded",
+  };
+}
+
+export function loadIdentity(env: NodeJS.ProcessEnv = process.env): Identity {
+  if (isRelease) {
+    return identityFromStamp({ STAMPED, APP_ID, EXPIRES_ON, SALT, CHUNKS });
   }
   const appId = env.DATABASE_ID ?? env.DITTO_APP_ID;
   const token = env.OFFLINE_TOKEN ?? env.DQL_OFFLINE_LICENSE;

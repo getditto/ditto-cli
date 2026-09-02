@@ -31,7 +31,8 @@ The Ditto CLI: an npm/Homebrew-installable TypeScript CLI (binary `ditto`) whose
 npm run dev -- <args>      # run the CLI from source (tsx, loads .env)
 node --env-file=.env dist/cli.js <args>   # run the built bundle with dev credentials
 npm run build              # tsup dev build → dist/cli.js
-RELEASE=true npm run build # release build (env credentials disabled)
+npm run stamp:token        # stamp build/token-chunks.ts from .env (obfuscated; gitignored)
+RELEASE=true npm run build # release build (env credentials disabled; needs stamp:token first)
 npm test                   # all vitest projects
 npm run test:unit|test:int|test:e2e
 npm run typecheck          # tsc --noEmit

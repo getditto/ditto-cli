@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { daysUntilExpiry, IdentityError, loadIdentity } from "../../src/identity/token.js";
+import { pack } from "../../src/identity/obfuscate.js";
+import {
+  daysUntilExpiry,
+  IdentityError,
+  identityFromStamp,
+  loadIdentity,
+} from "../../src/identity/token.js";
 
 describe("loadIdentity (dev build)", () => {
   it("reads DATABASE_ID + OFFLINE_TOKEN", () => {
@@ -45,6 +51,48 @@ describe("loadIdentity (dev build)", () => {
   it("throws when only one of the pair is set", () => {
     expect(() => loadIdentity({ DATABASE_ID: "x" } as NodeJS.ProcessEnv)).toThrow(IdentityError);
     expect(() => loadIdentity({ OFFLINE_TOKEN: "x" } as NodeJS.ProcessEnv)).toThrow(IdentityError);
+  });
+});
+
+describe("identityFromStamp (release reassembly)", () => {
+  it("rejects an unstamped stub module with IdentityError (exit 3)", () => {
+    const stub = { STAMPED: false, APP_ID: "", EXPIRES_ON: "", SALT: "", CHUNKS: [] };
+    expect(() => identityFromStamp(stub)).toThrow(IdentityError);
+    try {
+      identityFromStamp(stub);
+    } catch (err) {
+      expect((err as IdentityError).exitCode).toBe(3);
+      expect((err as IdentityError).message).toContain("no embedded license token");
+    }
+  });
+
+  it("reassembles the embedded identity from a stamped module", () => {
+    const stamp = pack("embedded-offline-token");
+    const id = identityFromStamp({
+      STAMPED: true,
+      APP_ID: "app-9",
+      EXPIRES_ON: "2027-05-01",
+      SALT: stamp.salt,
+      CHUNKS: stamp.chunks,
+    });
+    expect(id).toEqual({
+      appId: "app-9",
+      token: "embedded-offline-token",
+      expiresOn: "2027-05-01",
+      source: "embedded",
+    });
+  });
+
+  it("maps an empty EXPIRES_ON to undefined expiry", () => {
+    const stamp = pack("embedded-offline-token");
+    const id = identityFromStamp({
+      STAMPED: true,
+      APP_ID: "app-9",
+      EXPIRES_ON: "",
+      SALT: stamp.salt,
+      CHUNKS: stamp.chunks,
+    });
+    expect(id.expiresOn).toBeUndefined();
   });
 });
 
