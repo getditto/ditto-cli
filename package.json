@@ -33,6 +33,7 @@
     "test:int": "vitest run --project integration",
     "test:e2e": "vitest run --project e2e",
     "coverage": "vitest run --coverage --project unit --project integration",
+    "stamp:token": "tsx --env-file=.env scripts/stamp-token.ts",
     "spike:a": "node --env-file=.env scripts/spike-a.mjs",
     "spike:c": "node --env-file=.env scripts/spike-c.mjs"
   },

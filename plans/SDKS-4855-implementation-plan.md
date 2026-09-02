@@ -154,8 +154,8 @@ Branch: `aaronlabeau/sdks-4855-dql-cli-tool`. This file is the working checklist
 
 ## M8 — Distribution & release
 
-- [ ] `scripts/stamp-token.ts` — reads `DQL_OFFLINE_LICENSE`; salt → key → XOR → 7 chunks + 5 decoys at fixed positions → base64url → `build/token-chunks.ts`; expiry guard: fail < 45 days, warn < 90 days (JWT `exp`, `--expires` override for non-JWT formats)
-- [ ] Release build mode: `RELEASE=true` define; verify dev token env is dead in release bundle (e2e asserts env ignored)
+- [x] `scripts/stamp-token.ts` — reads `DQL_OFFLINE_LICENSE`; salt → key → XOR → 7 chunks + 5 decoys at fixed positions → base64url → `build/token-chunks.ts`; expiry guard: fail < 45 days, warn < 90 days (JWT `exp`, `--expires` override for non-JWT formats) — _done: `src/identity/obfuscate.ts` (pack/unpack, fixed slots), expiry from JWT `exp` or CBOR `expiry` ISO; `--expires` override_
+- [x] Release build mode: `RELEASE=true` define; verify dev token env is dead in release bundle (e2e asserts env ignored) — _done: esbuild plugin aliases `token-chunks.stub.js` → `build/token-chunks.ts`; verified manually (env-less + bogus-env runs). e2e release-build coverage deferred to release.yml_
 - [ ] `.github/workflows/release.yml` — on `v*` tag: full test matrix → stamp → build → `npm publish --provenance` → GitHub release → formula bump job
 - [ ] `scripts/bump-formula.ts` + `getditto/homebrew-tap` `Formula/ditto.rb` template — npm tarball URL + sha256, `depends_on "node"`, test block (`ditto version`); bump opens PR or direct-commits (decide with repo owners)
 - [ ] `.github/workflows/token-expiry.yml` — weekly cron; < 90 days → maintainer alert
