@@ -6,6 +6,11 @@ const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), 
   version: string;
 };
 
+// The SDK has no runtime version export — stamp its installed version at build time.
+const sdkPkg = JSON.parse(
+  readFileSync(new URL("./node_modules/@dittolive/ditto/package.json", import.meta.url), "utf8"),
+) as { version: string };
+
 // `RELEASE=true npm run build` stamps a release build (env credentials ignored).
 const release = process.env.RELEASE === "true";
 
@@ -40,6 +45,7 @@ export default defineConfig({
   external: ["@dittolive/ditto"],
   define: {
     __CLI_VERSION__: JSON.stringify(pkg.version),
+    __DITTO_SDK_VERSION__: JSON.stringify(sdkPkg.version),
     RELEASE: JSON.stringify(release ? "true" : "false"),
   },
   esbuildPlugins: release

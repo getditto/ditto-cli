@@ -59,6 +59,7 @@ describe("ditto version", () => {
     const out = stdout();
     for (const key of [
       "version",
+      "ditto_sdk",
       "channel",
       "update",
       "token_expires",
@@ -84,6 +85,7 @@ describe("ditto version", () => {
     await program.parseAsync(["node", "ditto", "version", "--format", "json"]);
     const parsed = JSON.parse(stdout());
     expect(parsed).toHaveProperty("version");
+    expect(parsed).toHaveProperty("ditto_sdk");
     expect(parsed).toHaveProperty("channel");
     expect(parsed).toHaveProperty("token_expires");
   });

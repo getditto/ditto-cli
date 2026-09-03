@@ -28,6 +28,7 @@ describe("e2e: ditto version / update / banner", () => {
     expect(r.exitCode).toBe(0);
     for (const key of [
       "version",
+      "ditto_sdk",
       "channel",
       "update",
       "token_expires",
@@ -42,6 +43,7 @@ describe("e2e: ditto version / update / banner", () => {
     expect(j.exitCode).toBe(0);
     const parsed = JSON.parse(j.stdout);
     expect(parsed).toHaveProperty("version");
+    expect(parsed).toHaveProperty("ditto_sdk");
     expect(parsed).toHaveProperty("channel");
 
     const bad = (await cli(["version", "--format", "yaml"])) as unknown as RunResult;

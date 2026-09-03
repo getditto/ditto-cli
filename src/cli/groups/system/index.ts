@@ -5,7 +5,7 @@ import { resolveDataDir } from "../../../config/paths.js";
 import { daysUntilExpiry, loadIdentity } from "../../../identity/token.js";
 import { detectChannel } from "../../../update/channel.js";
 import { checkForUpdate, isNewer, readCachedUpdate } from "../../../update/check.js";
-import { CLI_VERSION } from "../../version.js";
+import { CLI_VERSION, DITTO_SDK_VERSION } from "../../version.js";
 
 /** Injectable so tests don't hit the registry or spawn anything. */
 export interface SystemDeps {
@@ -27,7 +27,7 @@ const realDeps: SystemDeps = {
 export function registerSystemGroup(program: Command, deps: SystemDeps = realDeps): void {
   program
     .command("version")
-    .description("Show version, install channel, token expiry, and paths")
+    .description("Show CLI + Ditto SDK versions, install channel, token expiry, and paths")
     .option("--format <format>", "text | json")
     .action(async (opts: { format?: string }) => {
       if (opts.format !== undefined && opts.format !== "text" && opts.format !== "json") {
@@ -60,6 +60,7 @@ export function registerSystemGroup(program: Command, deps: SystemDeps = realDep
 
       const info = {
         version: CLI_VERSION,
+        ditto_sdk: DITTO_SDK_VERSION,
         channel: channel.detail,
         update: updateLine,
         token_expires: expiry,

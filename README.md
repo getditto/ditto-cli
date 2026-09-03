@@ -64,10 +64,11 @@ dittosh dql                                            # interactive REPL
 | `-f, --file <path>` | run statements from a file (`;`-separated) |
 | `-e, --execute <stmt>` | explicit statement (alternative to the positional) |
 | `-p, --param name=value` | bind `:name` parameters (repeatable; values JSON-parsed with string fallback) |
-| `--args <json>` | bind parameters from a JSON object |
-| `-o, --out <path>` | write results to a file (format from extension or `--format`; uncapped unless `--max-rows` is explicit) |
-| `--format table\|json\|csv` | output format (default: table on TTY, JSON when piped) |
+| `--args <json>` | bind parameters from a JSON object — `-` reads stdin, `@file` reads a file |
+| `-o, --out <path>` | write results to a file (format from extension — `.json`/`.csv`/`.md`/`.html` — or `--format`; uncapped unless `--max-rows` is explicit) |
+| `--format table\|json\|csv\|markdown\|html\|vertical` | output format (default: table on TTY, JSON when piped). `vertical` = one block per row, values never truncated |
 | `--max-rows <n>` | display cap, default 10,000 |
+| `--no-pager` | never pipe long TTY output through `$PAGER`/`less` (also: `DITTOSH_NO_PAGER=1`) |
 | `--continue-on-error` | keep running after a failure (batch mode) |
 | `--time` | timing footer (host wall-clock + server parse/plan/elapsed when profiling) |
 | `--explain` | print the query plan (EXPLAIN side-trip, SELECTs only) |
@@ -76,6 +77,15 @@ dittosh dql                                            # interactive REPL
 | `--apply` | apply ADVISE's suggested `CREATE INDEX` statements (prompts; `-y` skips) |
 | `-y, --yes` | skip confirmation prompts |
 
+On a terminal, tables fit the window width (long values ellipsize with `…`) and long results page through `less`. Piped stdout is always clean JSON, so results compose with `jq` — and `--args -` feeds a transformed result back in as parameters:
+
+```bash
+# find an id with one query, fetch the full doc with another
+dittosh dql "SELECT _id FROM movies WHERE _id.year = '2001' LIMIT 1" \
+  | jq '{id: .[0]._id}' \
+  | dittosh dql "SELECT * FROM movies WHERE _id = :id" --args -
+```
+
 ### `dittosh dql doctor`
 
 Platform/arch, Node version, data-directory writability, token validity + expiry, SDK load, and store-lock probe — with an exit code that says what's wrong.
@@ -83,6 +93,32 @@ Platform/arch, Node version, data-directory writability, token validity + expiry
 ### `dittosh dql collections` / `dittosh dql indexes [collection]`
 
 List collections (`system:collections`) and indexes (`system:indexes`).
+
+### `dittosh dql delete-store`
+
+Permanently delete the local store — the whole data directory: all collections, indexes, and files. Requires `-y` (no prompt); refuses while another process holds the store open (exit 4), and refuses absurd targets like `$HOME` or the cwd. To clear just one dataset's documents instead, use `dittosh dql dataset reset <name> -y`.
+
+### `dittosh dql import <file> <collection>`
+
+Import your own data. The standard format is a **JSON array of objects**:
+
+```json
+[
+  { "_id": "prod_1", "name": "Brass Hammer", "price": 24.99 },
+  { "_id": "prod_2", "name": "Cordless Drill", "price": 129.0 }
+]
+```
+
+```bash
+dittosh dql import products.json products
+dittosh dql "SELECT * FROM products WHERE price > 100"
+```
+
+- **NDJSON** (one object per line) is accepted too — detected automatically from the first character (`[` → array, `{` → NDJSON).
+- **`_id` is optional.** Documents without one get a generated UUID. Imports upsert (`ON ID CONFLICT DO UPDATE`), so re-importing a file with `_id`s is idempotent; re-importing docs *without* `_id` duplicates them.
+- **Collection names** must be identifier-style: letters, digits, underscores, not starting with a digit.
+- Large files insert in batches (`--batch-size`, default 500); progress on stderr, summary on stdout.
+- Exit codes: `2` unreadable/invalid file or bad collection name, `1` insert failed, `0` ok.
 
 ### `dittosh dql dataset` — sample data
 

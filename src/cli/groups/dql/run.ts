@@ -13,6 +13,7 @@ import { hasLimitClause } from "../../../query/split.js";
 import { renderAdvice } from "../../../render/advise.js";
 import { renderExplain } from "../../../render/explain.js";
 import { formatForOutFile, renderRows, resolveFormat } from "../../../render/output.js";
+import { type PageOptions, pageIfLong } from "../../../render/pager.js";
 import { renderProfile } from "../../../render/profile.js";
 
 export interface RunOptions {
@@ -41,6 +42,10 @@ export interface RunOptions {
   confirm?: (message: string) => Promise<boolean>;
   /** Injectable "is stdout a TTY" (diagnostic sections go to stderr when piped). */
   stdoutIsTTY?: boolean;
+  /** --no-pager sets this false; undefined = page long TTY output automatically. */
+  pager?: boolean;
+  /** Injectable pager (defaults to pageIfLong) for tests. */
+  page?: (text: string, opts?: PageOptions) => boolean;
 }
 
 export interface RunResult {
@@ -252,7 +257,14 @@ export async function runStatement(
       `Wrote ${rowsForFile.length.toLocaleString()} row${rowsForFile.length === 1 ? "" : "s"} to ${opts.out} in ${elapsedMs.toFixed(0)} ms (${format})${cappedNote}`,
     );
   } else {
-    console.log(renderRows(shown, format));
+    // Tables fit the terminal width on a TTY; pipes/files keep full fidelity.
+    // (A 0-column terminal is degenerate — some ptys report 0x0 — treat as unknown.)
+    const tty = opts.stdoutIsTTY ?? process.stdout.isTTY;
+    const rendered = renderRows(shown, format, {
+      maxWidth: tty ? process.stdout.columns || undefined : undefined,
+    });
+    const page = opts.page ?? pageIfLong;
+    if (!page(rendered, { disabled: opts.pager === false })) console.log(rendered);
   }
   if (truncated && !opts.out) {
     console.error(

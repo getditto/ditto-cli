@@ -27,7 +27,16 @@
 const DEFAULT_SUBCOMMANDS: Record<string, { exec: string; known: Set<string> }> = {
   dql: {
     exec: "exec",
-    known: new Set(["exec", "doctor", "collections", "indexes", "dataset", "help"]),
+    known: new Set([
+      "exec",
+      "doctor",
+      "collections",
+      "indexes",
+      "dataset",
+      "delete-store",
+      "import",
+      "help",
+    ]),
   },
 };
 

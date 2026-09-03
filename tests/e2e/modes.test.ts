@@ -330,4 +330,197 @@ describe.skipIf(!hasDevCredentials)(`e2e: ditto dql input modes (${NO_CREDENTIAL
       rmrf(dir);
     }
   });
+
+  it("--format markdown/html/vertical render on stdout", async () => {
+    const dir = tmpDataDir("ditto-e2e-");
+    try {
+      await cli([
+        "dql",
+        "INSERT INTO movies DOCUMENTS ({'_id':'f1','title':'Alien','year':1979}) ON ID CONFLICT DO UPDATE",
+        "-d",
+        dir,
+      ]);
+      const md = (await cli([
+        "dql",
+        "SELECT * FROM movies",
+        "-d",
+        dir,
+        "--format",
+        "markdown",
+      ])) as unknown as RunResult;
+      expect(md.exitCode).toBe(0);
+      expect(md.stdout).toContain("| _id | title | year |");
+      expect(md.stdout).toContain("| --- | --- | --- |");
+      expect(md.stdout).toContain("| f1 | Alien | 1979 |");
+
+      const html = (await cli([
+        "dql",
+        "SELECT * FROM movies",
+        "-d",
+        dir,
+        "--format",
+        "html",
+      ])) as unknown as RunResult;
+      expect(html.exitCode).toBe(0);
+      expect(html.stdout).toContain("<table>");
+      expect(html.stdout).toContain("<td>Alien</td>");
+
+      const vert = (await cli([
+        "dql",
+        "SELECT * FROM movies",
+        "-d",
+        dir,
+        "--format",
+        "vertical",
+      ])) as unknown as RunResult;
+      expect(vert.exitCode).toBe(0);
+      expect(vert.stdout).toContain("row 1");
+      expect(vert.stdout).toContain("title │ Alien");
+    } finally {
+      rmrf(dir);
+    }
+  });
+
+  it("-o infers markdown/html from the file extension", async () => {
+    const dir = tmpDataDir("ditto-e2e-");
+    try {
+      await cli([
+        "dql",
+        "INSERT INTO movies DOCUMENTS ({'_id':'o1','title':'Out','year':2001}) ON ID CONFLICT DO UPDATE",
+        "-d",
+        dir,
+      ]);
+      const mdPath = path.join(dir, "results.md");
+      const md = (await cli([
+        "dql",
+        "SELECT * FROM movies",
+        "-d",
+        dir,
+        "-o",
+        mdPath,
+      ])) as unknown as RunResult;
+      expect(md.exitCode).toBe(0);
+      expect(md.stdout).toContain("(markdown)");
+      expect(fs.readFileSync(mdPath, "utf8")).toContain("| _id | title | year |");
+
+      const htmlPath = path.join(dir, "results.html");
+      const html = (await cli([
+        "dql",
+        "SELECT * FROM movies",
+        "-d",
+        dir,
+        "-o",
+        htmlPath,
+      ])) as unknown as RunResult;
+      expect(html.exitCode).toBe(0);
+      expect(html.stdout).toContain("(html)");
+      expect(fs.readFileSync(htmlPath, "utf8")).toContain("<td>Out</td>");
+    } finally {
+      rmrf(dir);
+    }
+  });
+
+  it("--args - reads params from stdin (the jq pipeline form)", async () => {
+    const dir = tmpDataDir("ditto-e2e-");
+    try {
+      await cli([
+        "dql",
+        "INSERT INTO movies DOCUMENTS ({'_id':'p1','title':'Alien','year':1979}), ({'_id':'p2','title':'Toy Story','year':1995}) ON ID CONFLICT DO UPDATE",
+        "-d",
+        dir,
+      ]);
+      const r = (await cli(
+        ["dql", "SELECT title FROM movies WHERE year > :minYear", "-d", dir, "--args", "-"],
+        { input: '{"minYear":1980}' },
+      )) as unknown as RunResult;
+      expect(r.exitCode).toBe(0);
+      expect(JSON.parse(r.stdout)).toEqual([{ title: "Toy Story" }]);
+    } finally {
+      rmrf(dir);
+    }
+  });
+
+  it("--args @file reads params from a file", async () => {
+    const dir = tmpDataDir("ditto-e2e-");
+    try {
+      await cli([
+        "dql",
+        "INSERT INTO movies DOCUMENTS ({'_id':'p1','title':'Alien','year':1979}) ON ID CONFLICT DO UPDATE",
+        "-d",
+        dir,
+      ]);
+      const paramsFile = path.join(dir, "params.json");
+      fs.writeFileSync(paramsFile, '{"maxYear":1990}', "utf8");
+      const r = (await cli([
+        "dql",
+        "SELECT title FROM movies WHERE year < :maxYear",
+        "-d",
+        dir,
+        "--args",
+        `@${paramsFile}`,
+      ])) as unknown as RunResult;
+      expect(r.exitCode).toBe(0);
+      expect(JSON.parse(r.stdout)).toEqual([{ title: "Alien" }]);
+    } finally {
+      rmrf(dir);
+    }
+  });
+
+  it("--args source errors are usage errors (exit 2)", async () => {
+    const dir = tmpDataDir("ditto-e2e-");
+    try {
+      // stdin is the statement batch — --args - has nothing to read from
+      const conflict = (await cli(["dql", "-d", dir, "--args", "-"], {
+        input: "SELECT 1;",
+      })) as unknown as RunResult;
+      expect(conflict.exitCode).toBe(2);
+      expect(conflict.stderr).toContain("consumes stdin");
+
+      const badJson = (await cli(["dql", "SELECT 1", "-d", dir, "--args", "-"], {
+        input: "not json",
+      })) as unknown as RunResult;
+      expect(badJson.exitCode).toBe(2);
+
+      const array = (await cli(["dql", "SELECT 1", "-d", dir, "--args", "-"], {
+        input: "[1,2]",
+      })) as unknown as RunResult;
+      expect(array.exitCode).toBe(2);
+
+      const missing = (await cli([
+        "dql",
+        "SELECT 1",
+        "-d",
+        dir,
+        "--args",
+        "@/no/such/file.json",
+      ])) as unknown as RunResult;
+      expect(missing.exitCode).toBe(2);
+      expect(missing.stderr).toContain("cannot read");
+    } finally {
+      rmrf(dir);
+    }
+  });
+
+  it("--no-pager is accepted", async () => {
+    const dir = tmpDataDir("ditto-e2e-");
+    try {
+      await cli([
+        "dql",
+        "INSERT INTO movies DOCUMENTS ({'_id':'np1','title':'Alien'}) ON ID CONFLICT DO UPDATE",
+        "-d",
+        dir,
+      ]);
+      const r = (await cli([
+        "dql",
+        "SELECT title FROM movies",
+        "-d",
+        dir,
+        "--no-pager",
+      ])) as unknown as RunResult;
+      expect(r.exitCode).toBe(0);
+      expect(JSON.parse(r.stdout)).toEqual([{ title: "Alien" }]);
+    } finally {
+      rmrf(dir);
+    }
+  });
 });

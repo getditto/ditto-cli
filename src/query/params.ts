@@ -1,4 +1,6 @@
+import fs from "node:fs";
 import type { DQLQueryArguments } from "@dittolive/ditto";
+import { expandTilde } from "../config/paths.js";
 
 export class ParamError extends Error {
   readonly exitCode = 2;
@@ -6,6 +8,33 @@ export class ParamError extends Error {
     super(message);
     this.name = "ParamError";
   }
+}
+
+/**
+ * Resolve the --args value to a JSON string:
+ *  - `--args '{"id":1}'`  inline (returned as-is)
+ *  - `--args -`           read from stdin (the jq pipeline form)
+ *  - `--args @file.json`  read from a file (curl-style)
+ * The result is validated by parseParams (must be a JSON object).
+ */
+export async function resolveArgsSource(
+  value: string | undefined,
+  readStdin: () => Promise<string>,
+): Promise<string | undefined> {
+  if (value === undefined) return undefined;
+  if (value === "-") return readStdin();
+  if (value.startsWith("@")) {
+    const file = value.slice(1).trim();
+    if (!file) {
+      throw new ParamError("--args @ requires a file path (e.g. --args @params.json)");
+    }
+    try {
+      return fs.readFileSync(expandTilde(file), "utf8");
+    } catch (err) {
+      throw new ParamError(`--args: cannot read ${file}: ${(err as Error).message}`);
+    }
+  }
+  return value;
 }
 
 /** Parse a CLI integer flag; usage error (exit 2) on garbage or out-of-range. */

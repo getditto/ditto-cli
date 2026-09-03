@@ -158,6 +158,46 @@ describe("runStatement", () => {
     expect(errOut).toContain("in: SELEC broken");
   });
 
+  it("routes stdout through the pager when it claims the output", async () => {
+    const page = vi.fn((_text: string) => true);
+    const r = await runStatement(fakeExecutor([{ _id: "1" }]), "SELECT * FROM movies", {
+      ...baseOpts,
+      format: "table",
+      page,
+    });
+    expect(r.ok).toBe(true);
+    expect(page).toHaveBeenCalledOnce();
+    expect(page.mock.calls[0]![0]).toContain("┌"); // the rendered table
+    expect(outSpy).not.toHaveBeenCalled(); // pager showed it — no direct print
+  });
+
+  it("prints directly when the pager declines, passing --no-pager through", async () => {
+    const page = vi.fn(() => false);
+    await runStatement(fakeExecutor([{ _id: "1" }]), "SELECT * FROM movies", {
+      ...baseOpts,
+      format: "table",
+      pager: false,
+      page,
+    });
+    expect(page).toHaveBeenCalledWith(expect.any(String), { disabled: true });
+    expect(outSpy.mock.calls[0]![0]).toContain("┌");
+  });
+
+  it("never pages -o file exports", async () => {
+    const dir = tmpDataDir("ditto-run-");
+    try {
+      const page = vi.fn(() => true);
+      await runStatement(fakeExecutor([{ _id: "1" }]), "SELECT * FROM movies", {
+        ...baseOpts,
+        out: path.join(dir, "out.json"),
+        page,
+      });
+      expect(page).not.toHaveBeenCalled();
+    } finally {
+      rmrf(dir);
+    }
+  });
+
   it("warns once about SELECT without LIMIT when interactive, then persists the flag", async () => {
     process.env.DITTOSH_CONFIG_DIR = tmpDataDir("ditto-state-");
     try {

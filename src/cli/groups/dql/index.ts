@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import chalk from "chalk";
 import type { Command } from "commander";
-import { isBogusDataDir, resolveDataDir } from "../../../config/paths.js";
+import { expandTilde, isBogusDataDir, resolveDataDir } from "../../../config/paths.js";
 import {
   DataDirError,
   DittoSession,
@@ -11,14 +11,21 @@ import {
 } from "../../../ditto/session.js";
 import { daysUntilExpiry, IdentityError, loadIdentity } from "../../../identity/token.js";
 import { classify } from "../../../query/execute.js";
-import { ParamError, parseParams, parsePositiveInt } from "../../../query/params.js";
+import {
+  ParamError,
+  parseParams,
+  parsePositiveInt,
+  resolveArgsSource,
+} from "../../../query/params.js";
 import { isBlankOrComments, splitComplete, splitStatements } from "../../../query/split.js";
 import { FormatError, resolveFormat } from "../../../render/output.js";
 import { runBatch, stripDotCommandLines } from "./batch.js";
 import { registerDatasetCommands } from "./dataset.js";
+import { deleteStore } from "./delete-store.js";
 import { collectDoctorChecks } from "./doctor.js";
+import { ImportError, importDocuments, isValidCollectionName, parseImportFile } from "./import.js";
 import { startRepl } from "./repl.js";
-import { runStatement, validateOutPath } from "./run.js";
+import { note, runStatement, validateOutPath } from "./run.js";
 
 interface ExecOpts {
   dataDir?: string;
@@ -29,6 +36,7 @@ interface ExecOpts {
   param?: string[];
   args?: string;
   continueOnError?: boolean;
+  pager?: boolean;
   time?: boolean;
   explain?: boolean;
   profile?: boolean;
@@ -100,6 +108,7 @@ function execRunOpts(opts: ExecOpts, maxRowsExplicit: boolean) {
     maxRowsExplicit,
     out: opts.out,
     params: parseParams(opts.param, opts.args),
+    pager: opts.pager,
     time: opts.time,
     explain: opts.explain,
     profile: opts.profile,
@@ -112,6 +121,13 @@ function execRunOpts(opts: ExecOpts, maxRowsExplicit: boolean) {
 /** Commander collector for repeatable -p/--param (non-variadic — a variadic would swallow the positional statement). */
 function collectParam(value: string, previous: string[]): string[] {
   return [...previous, value];
+}
+
+/** Fully consume stdin as text (statement batches, `--args -`). */
+async function readStdinText(): Promise<string> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of process.stdin) chunks.push(chunk as Buffer);
+  return Buffer.concat(chunks).toString("utf8");
 }
 
 /** Run statements from a file or piped stdin (validation already done by the caller). */
@@ -195,6 +211,79 @@ export function registerDqlGroup(dql: ReturnType<Command["command"]>): void {
       }
     });
 
+  dql
+    .command("delete-store")
+    .description("Permanently delete the local store — all collections, indexes, and files")
+    .option("-y, --yes", "confirm without prompting", false)
+    .option("-d, --data-dir <path>", "override the data directory")
+    .action(async (opts: { yes: boolean; dataDir?: string }) => {
+      const r = await deleteStore(opts);
+      if (r.code === 0) console.log(r.message);
+      else console.error(chalk.red(r.message));
+      process.exitCode = r.code;
+    });
+
+  dql
+    .command("import")
+    .description("Import documents from a JSON file into a collection")
+    .argument("<file>", "JSON file: an array of objects, or NDJSON (one object per line)")
+    .argument("<collection>", "target collection (created on first insert)")
+    .option("-d, --data-dir <path>", "override the data directory")
+    .option("--batch-size <n>", "documents per INSERT batch", "500")
+    .action(
+      async (file: string, collection: string, opts: { dataDir?: string; batchSize: string }) => {
+        // Validate everything before opening the store (usage beats lock).
+        let docs: Record<string, unknown>[];
+        let batchSize: number;
+        try {
+          if (!isValidCollectionName(collection)) {
+            throw new ImportError(
+              `invalid collection name "${collection}" — letters, digits, and underscores only (must not start with a digit)`,
+            );
+          }
+          let text: string;
+          try {
+            text = fs.readFileSync(expandTilde(file), "utf8");
+          } catch (err) {
+            throw new ImportError(`Cannot read file: ${file} (${(err as Error).message})`);
+          }
+          docs = parseImportFile(text, file);
+          batchSize = parsePositiveInt(opts.batchSize, "--batch-size", 500);
+        } catch (err) {
+          if (err instanceof ImportError || err instanceof ParamError) {
+            console.error(chalk.red(err.message));
+            process.exitCode = err.exitCode;
+            return;
+          }
+          throw err;
+        }
+
+        const session = await openSession(opts);
+        if (!session) return;
+        try {
+          const started = performance.now();
+          note(`Importing ${docs.length.toLocaleString()} documents into ${collection}…`);
+          const inserted = await importDocuments(session, docs, collection, {
+            batchSize,
+            onProgress: (ins, total) =>
+              note(`  ${collection}: ${ins.toLocaleString()}/${total.toLocaleString()}`),
+          });
+          const elapsed = ((performance.now() - started) / 1000).toFixed(1);
+          console.log(
+            `Imported ${inserted.toLocaleString()} document${inserted === 1 ? "" : "s"} into ${collection} (${elapsed}s)`,
+          );
+        } catch (err) {
+          const e = err as { message?: string; code?: string };
+          console.error(
+            chalk.red(`Import failed${e.code ? ` [${e.code}]` : ""}: ${e.message ?? err}`),
+          );
+          process.exitCode = 1;
+        } finally {
+          await session.close();
+        }
+      },
+    );
+
   // Execution subcommand (also the default — see rewriteDefaultSubcommand in
   // the CLI entry, which maps `dittosh dql <stmt>` → `dittosh dql exec <stmt>`;
   // an action directly on `dql` would swallow same-named child options).
@@ -210,11 +299,15 @@ export function registerDqlGroup(dql: ReturnType<Command["command"]>): void {
       collectParam,
       [] as string[],
     )
-    .option("--args <json>", "bind parameters from a JSON object")
+    .option(
+      "--args <json>",
+      "bind parameters from a JSON object ('-' reads stdin, '@file' reads a file)",
+    )
     .option("-d, --data-dir <path>", "override the data directory")
     .option("-o, --out <path>", "write results to a file (format from extension or --format)")
-    .option("--format <format>", "table | json | csv")
+    .option("--format <format>", "table | json | csv | markdown | html | vertical")
     .option("--max-rows <n>", "maximum rows to display", "10000")
+    .option("--no-pager", "never pipe results through $PAGER/less")
     .option("--continue-on-error", "keep running statements after a failure (-f/stdin)", false)
     .option("--time", "print timing after the results", false)
     .option("--explain", "run EXPLAIN on the statement and print the plan", false)
@@ -253,7 +346,25 @@ export function registerDqlGroup(dql: ReturnType<Command["command"]>): void {
             "--advise renders a report, not rows — it can't be combined with -o/--out",
           );
         }
-        runOpts = execRunOpts(opts, command.getOptionValueSource("maxRows") === "cli");
+        // `--args -` reads the JSON params object from stdin — which requires
+        // piped stdin AND a statement from argv/-e/-f (else stdin IS the batch).
+        if (opts.args === "-") {
+          if (process.stdin.isTTY) {
+            throw new ParamError(
+              "--args - reads a JSON object from stdin, but stdin is a terminal",
+            );
+          }
+          if (!positional && !opts.execute && !opts.file) {
+            throw new ParamError(
+              "--args - consumes stdin — pass the statement positionally, via -e, or via -f",
+            );
+          }
+        }
+        const argsJson = await resolveArgsSource(opts.args, readStdinText);
+        runOpts = execRunOpts(
+          { ...opts, args: argsJson },
+          command.getOptionValueSource("maxRows") === "cli",
+        );
       } catch (err) {
         if (err instanceof ParamError || err instanceof FormatError) {
           console.error(chalk.red(err.message));
@@ -384,9 +495,7 @@ export function registerDqlGroup(dql: ReturnType<Command["command"]>): void {
         batchSource = opts.file;
       } else if (!statement) {
         // piped stdin — fully consume before opening (usage beats lock)
-        const chunks: Buffer[] = [];
-        for await (const chunk of process.stdin) chunks.push(chunk as Buffer);
-        batchText = Buffer.concat(chunks).toString("utf8");
+        batchText = await readStdinText();
       }
 
       // Batch usage validation before touching the store.
