@@ -208,4 +208,4 @@ npm run build           # tsup → dist/cli.js
 
 ## License
 
-Proprietary — © Ditto.
+MIT — © Ditto. See [LICENSE.md](LICENSE.md).
