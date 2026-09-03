@@ -23,6 +23,12 @@ describe("renderMarkdown", () => {
     expect(out).toContain("a\\|b<br>c");
   });
 
+  it("escapes backslashes before pipes so data \\| can't break the row", () => {
+    const out = renderMarkdown([{ _id: "1", path: "C:\\tools", note: "a\\|b" }]);
+    expect(out).toContain("C:\\\\tools"); // literal backslash doubles
+    expect(out).toContain("a\\\\\\|b"); // data backslash + escaped pipe
+  });
+
   it("renders nested objects as compact JSON", () => {
     const out = renderMarkdown([{ _id: "1", loc: { city: "Seattle" } }]);
     expect(out).toContain('{"city":"Seattle"}');

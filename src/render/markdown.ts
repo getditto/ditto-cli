@@ -10,7 +10,13 @@ export function renderMarkdown(rows: Record<string, unknown>[]): string {
   if (rows.length === 0) return "(no rows)";
 
   const cols = collectColumns(rows);
-  const esc = (s: string) => stripControlChars(s).replace(/\|/g, "\\|").replace(/\r?\n/g, "<br>");
+  // Backslashes first — escaping pipes alone would let a data `\|` (or a
+  // trailing `\`) corrupt the table (CodeQL: incomplete string escaping).
+  const esc = (s: string) =>
+    stripControlChars(s)
+      .replace(/\\/g, "\\\\")
+      .replace(/\|/g, "\\|")
+      .replace(/\r?\n/g, "<br>");
 
   const lines = [
     `| ${cols.map((c) => esc(c)).join(" | ")} |`,
