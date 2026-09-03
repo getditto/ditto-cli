@@ -13,10 +13,7 @@ export function renderMarkdown(rows: Record<string, unknown>[]): string {
   // Backslashes first — escaping pipes alone would let a data `\|` (or a
   // trailing `\`) corrupt the table (CodeQL: incomplete string escaping).
   const esc = (s: string) =>
-    stripControlChars(s)
-      .replace(/\\/g, "\\\\")
-      .replace(/\|/g, "\\|")
-      .replace(/\r?\n/g, "<br>");
+    stripControlChars(s).replace(/\\/g, "\\\\").replace(/\|/g, "\\|").replace(/\r?\n/g, "<br>");
 
   const lines = [
     `| ${cols.map((c) => esc(c)).join(" | ")} |`,
