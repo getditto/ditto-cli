@@ -5,7 +5,7 @@ copy-pasteable and uses the default data dir. Run top to bottom; check off
 what passes. Note anything off (rendering glitches, wrong exit codes, noise
 on stdout) as a comment under the failing test.
 
-Sibling file: `manualTesting.retail-joins.md` covers the same surface against
+Sibling file: `testing-dql-retail-joins.md` covers the same surface against
 the normalized `retail-joins` dataset (JOINs, anti-joins, join indexes).
 
 Prereq: the release build is installed (`scripts/install-release.sh`).

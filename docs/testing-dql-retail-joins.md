@@ -12,7 +12,7 @@ Every command is copy-pasteable and uses the default data dir. Run top to
 bottom; check off what passes. Note anything off (rendering glitches, wrong
 exit codes, noise on stdout) as a comment under the failing test.
 
-Sibling file: `manualTesting.retail.md` covers the same feature surface
+Sibling file: `testing-dql-retail.md` covers the same feature surface
 against the denormalized `retail` dataset (no JOINs needed).
 
 Prereq: the release build is installed (`scripts/install-release.sh`).
