@@ -20,7 +20,7 @@ The Ditto CLI: an npm/Homebrew-installable TypeScript CLI (binary `dittosh` — 
 - `src/identity/` — token loading (dev env / release reassembly), expiry
 - `src/ditto/session.ts` — the only SDK touchpoint: init/open/close, log taming, lock mapping
 - `src/query/` — statement classifier, splitter, param binding, result extraction, row cap
-- `src/render/` — table/JSON/CSV, `-o/--out`, (M4: explain/profile/advise renderers)
+- `src/render/` — table (terminal-width fitting)/JSON/CSV/markdown/HTML/vertical, pager (`$PAGER`/`less`, `--no-pager`/`DITTOSH_NO_PAGER`), `-o/--out`, (M4: explain/profile/advise renderers)
 - `datasets/` — vendored benchmark suite definitions (movies, retail, retail-joins, pos); **no generated data ever committed**
 - `scripts/` — `spike-a.mjs` (SDK verification), `stamp-token.ts` (M8)
 - `tests/unit|integration|e2e` + `tests/setup/env.ts` (loads `.env`) + `tests/helpers/`
@@ -38,7 +38,12 @@ npm run test:unit|test:int|test:e2e
 npm run typecheck          # tsc --noEmit
 npm run lint               # biome check
 npm run spike:a            # SDK init/token/DQL smoke script
+scripts/install-release.sh # stamp token → RELEASE=true build → npm i -g . (installs `dittosh` globally)
 ```
+
+## User phrasing worth knowing
+
+- **"build a new version and install it"** = run `scripts/install-release.sh` — a *release* build (stamped token, env credentials disabled) installed globally on this machine so the user can test `dittosh` directly. Not a dev build, not a version-number bump.
 
 ## Testing conventions
 

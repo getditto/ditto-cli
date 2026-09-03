@@ -25,7 +25,15 @@ describe("rewriteDefaultSubcommand", () => {
   });
 
   it("leaves known subcommands alone", () => {
-    for (const sub of ["exec", "doctor", "collections", "indexes", "dataset"]) {
+    for (const sub of [
+      "exec",
+      "doctor",
+      "collections",
+      "indexes",
+      "dataset",
+      "delete-store",
+      "import",
+    ]) {
       expect(rewriteDefaultSubcommand(["dql", sub, "-d", "/tmp/x"])).toEqual([
         "dql",
         sub,

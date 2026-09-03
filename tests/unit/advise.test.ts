@@ -67,6 +67,28 @@ describe("renderAdvice", () => {
     expect(out).toContain("--apply");
   });
 
+  it("prints a copy-pasteable apply command with the analyzed statement", () => {
+    const out = renderAdvice(extractQueryAdvice([ADVICE_ROW])!);
+    expect(out).toContain(
+      `apply with: dittosh dql --advise --apply "SELECT * FROM movies WHERE rated = 'PG'"`,
+    );
+  });
+
+  it("shell-escapes the analyzed statement in the apply command", () => {
+    const out = renderAdvice({
+      statement: 'SELECT * FROM m WHERE t = "x" AND p = $1',
+      suggestedIndexes: [{ collection: "m", statement: "CREATE INDEX i ON m (t)" }],
+    });
+    expect(out).toContain('--apply "SELECT * FROM m WHERE t = \\"x\\" AND p = \\$1"');
+  });
+
+  it("falls back to the <statement> placeholder when no statement was echoed", () => {
+    const out = renderAdvice({
+      suggestedIndexes: [{ collection: "m", statement: "CREATE INDEX i ON m (t)" }],
+    });
+    expect(out).toContain('"<statement>"');
+  });
+
   it("renders the empty state with outcome text", () => {
     const out = renderAdvice({ suggestedIndexes: [], outcome: "no keys to advise on" });
     expect(out).toContain("no index suggestions");

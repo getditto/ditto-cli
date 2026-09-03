@@ -92,6 +92,24 @@ describe.skipIf(!hasDevCredentials)(`integration: DittoSession (${NO_CREDENTIALS
     expect(lock.detail).toContain("locked by another process");
   });
 
+  it("deleteStore refuses a store this process holds open (exit 4), real probe", async () => {
+    const { deleteStore } = await import("../../src/cli/groups/dql/delete-store.js");
+    // session holds the lock on dataDir (opened in beforeAll)
+    const r = await deleteStore({ dataDir, yes: true });
+    expect(r.code).toBe(4);
+    expect(fs.existsSync(dataDir)).toBe(true);
+  });
+
+  it("deleteStore deletes an unlocked store end to end (real probe)", async () => {
+    const { deleteStore } = await import("../../src/cli/groups/dql/delete-store.js");
+    const dir = tmpDataDir("ditto-delete-");
+    const s = await DittoSession.open(loadIdentity(), dir);
+    await s.close();
+    const r = await deleteStore({ dataDir: dir, yes: true });
+    expect(r.code).toBe(0);
+    expect(fs.existsSync(dir)).toBe(false);
+  });
+
   it("a read-only data dir maps to DataDirError (exit 3)", async () => {
     const roDir = tmpDataDir("ditto-ro-");
     fs.chmodSync(roDir, 0o555);

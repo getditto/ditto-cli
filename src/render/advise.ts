@@ -1,6 +1,11 @@
 import chalk from "chalk";
 import type { QueryAdvice } from "../query/advise.js";
 
+/** Double-quote a statement for copy-paste into bash/zsh (escape the four "-specials). */
+function shellQuote(s: string): string {
+  return `"${s.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\$/g, "\\$").replace(/`/g, "\\`")}"`;
+}
+
 /**
  * Edge Studio's "Index advice" card, rendered for the terminal.
  * `applied` maps suggestion statement → outcome after --apply.
@@ -39,8 +44,10 @@ export function renderAdvice(
   }
   if (!applied) {
     lines.push("");
+    // The analyzed statement is known — print the literal command so it's copy-pasteable.
+    const target = advice.statement ? shellQuote(advice.statement) : '"<statement>"';
     lines.push(
-      chalk.dim('  apply with: dittosh dql --advise --apply "<statement>" (prompts; -y skips)'),
+      chalk.dim(`  apply with: dittosh dql --advise --apply ${target} (prompts; -y skips)`),
     );
   }
   return lines.join("\n");

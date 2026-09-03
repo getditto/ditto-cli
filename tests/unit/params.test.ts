@@ -1,5 +1,13 @@
-import { describe, expect, it } from "vitest";
-import { ParamError, parseParams, parsePositiveInt } from "../../src/query/params.js";
+import fs from "node:fs";
+import path from "node:path";
+import { describe, expect, it, vi } from "vitest";
+import {
+  ParamError,
+  parseParams,
+  parsePositiveInt,
+  resolveArgsSource,
+} from "../../src/query/params.js";
+import { rmrf, tmpDataDir } from "../helpers/credentials.js";
 
 describe("parseParams", () => {
   it("returns undefined when nothing is provided", () => {
@@ -57,6 +65,49 @@ describe("parseParams", () => {
     for (const bad of ["[1,2]", '"str"', "42", "not json"]) {
       expect(() => parseParams(undefined, bad)).toThrow(ParamError);
     }
+  });
+});
+
+describe("resolveArgsSource", () => {
+  const noStdin = async () => {
+    throw new Error("stdin should not be read");
+  };
+
+  it("passes inline JSON through untouched", async () => {
+    await expect(resolveArgsSource('{"year":1994}', noStdin)).resolves.toBe('{"year":1994}');
+    await expect(resolveArgsSource(undefined, noStdin)).resolves.toBeUndefined();
+  });
+
+  it("'-' reads the JSON object from stdin", async () => {
+    const readStdin = vi.fn(async () => '{"year":2001}');
+    await expect(resolveArgsSource("-", readStdin)).resolves.toBe('{"year":2001}');
+    expect(readStdin).toHaveBeenCalledOnce();
+  });
+
+  it("'@file' reads the JSON object from a file (tilde-safe)", async () => {
+    const dir = tmpDataDir("args-file-");
+    try {
+      const file = path.join(dir, "params.json");
+      fs.writeFileSync(file, '{"id":"abc"}', "utf8");
+      await expect(resolveArgsSource(`@${file}`, noStdin)).resolves.toBe('{"id":"abc"}');
+    } finally {
+      rmrf(dir);
+    }
+  });
+
+  it("rejects a bare '@' and unreadable files (usage, exit 2)", async () => {
+    await expect(resolveArgsSource("@", noStdin)).rejects.toThrow(ParamError);
+    await expect(resolveArgsSource("@/no/such/file.json", noStdin)).rejects.toThrow(/cannot read/);
+  });
+
+  it("composes with parseParams: stdin JSON becomes bound params", async () => {
+    const json = await resolveArgsSource("-", async () => '{"year":2001}');
+    expect(parseParams(undefined, json)).toEqual({ year: 2001 });
+  });
+
+  it("non-object JSON from stdin fails at parseParams with a clear error", async () => {
+    const json = await resolveArgsSource("-", async () => "[1,2]");
+    expect(() => parseParams(undefined, json)).toThrow(ParamError);
   });
 });
 
