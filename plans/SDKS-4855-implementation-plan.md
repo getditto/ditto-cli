@@ -9,7 +9,8 @@ Branch: `aaronlabeau/sdks-4855-dql-cli-tool`. This file is the working checklist
 - **Adversarial review: 17 rounds, ~161 issues found and fixed, CONVERGED** (final round returned "no issues found"). Every fix carries regression tests; every round verified fixes live (incl. pty-level REPL checks).
 - Two upstream SDK 5.1.0 bugs found and reported on the Linear ticket (NO_COLOR native panic; retail-joins query hang) — both mitigated CLI-side, see Known issues.
 - Current: **392/392 tests green · coverage 89.3/86.7/90.6/89.9 (85% hard gate) · lint + typecheck clean.**
-- Remaining: M6 (skills), M7 (self-update), M8 (distribution + token stamping).
+- M6/M7/M8 landed since; **M9 (`dittosh server`, portal HTTP API) landed on branch `portal-support`** — see the M9 section.
+- Remaining: M8 loose ends (release.yml, formula, README).
 
 ## Sequencing approach
 
@@ -166,6 +167,34 @@ Branch: `aaronlabeau/sdks-4855-dql-cli-tool`. This file is the working checklist
 **Exit:** v1.0.0 published to npm + Homebrew; token-expiry grep clean.
 
 ---
+
+## M9 — `dittosh server` (portal HTTP API) — branch `portal-support`
+
+**Goal:** full client for the Ditto Server (Big Peer) HTTP RPC API — the API the portal's DQL editor uses. Endpoint inventory from the public docs (`docs.ditto.live/cloud/http-api`, incl. the OpenAPI spec at `/cloud/http-api/api/openapi.json`) and the portal's own client (`cloud-services/portal/core/src/api/rpcClient.ts`).
+
+- [x] Config resolution (`src/server/config.ts`): flags (`--url`/`--api-key`) > shell env (`DITTOSH_SERVER_URL`/`DITTOSH_SERVER_API_KEY`, aliases `DITTO_CLOUD_URL`/`DITTO_API_KEY`) > cwd `.env` (parsed via `util.parseEnv`, never overrides real env). URL normalized (scheme added, trailing slashes stripped). Missing config → exit 3 with portal guidance. `sources` tracked for `server doctor`. `--api-version v4|v5` (default v5) selects the `/store/execute` API version.
+- [x] HTTP client (`src/server/client.ts`): global fetch (injectable for tests), `Authorization: Bearer`, `X-DITTO-TXN-ID`, 30s timeout, JSON-or-text error bodies, API-key redaction in error messages (≥8 chars). Error mapping: 401/403 + connection failures → exit 3; other HTTP rejections → exit 1.
+- [x] `server execute` (alias `exec`) — POST `/api/v{4,5}/store/execute`: positional/`-e`/`-f`/stdin batch (one call per statement, `--continue-on-error`), `-p`/`--args` binding, `--txn-id`, all output formats + `-o` + pager + `--max-rows` + `--time` (same render pipeline as local `dql`). DQL errors arrive as `error.description` in a 200/400 body → exit 1. Batch dot-command stripping is local-REPL-only, not applied here.
+- [x] `server remote-execute` — POST `/api/v5/sync/remote_execute`; client-side SYNC CONTEXT check (exit 2); per-peer JSON envelope out.
+- [x] ~~Legacy store API~~ — **pulled post-review**: find/findbyid/count/write are the legacy pre-DQL API; `server execute` covers all of it with full DQL. (Verified live that legacy `:param` placeholders are rejected by the current deployment despite the OpenAPI text — another reason not to ship them.)
+- [x] `server attachment upload|get` — multipart POST / byte GET; get refuses binary on a TTY without `-o`, pipes raw bytes otherwise.
+- [x] `server roles list|create|delete` + `server users list|set-roles|delete` — RBAC endpoints the portal uses (undocumented publicly); both GET /roles wire shapes (bucketed + cursor-paged) normalized. Destructive deletes confirm (`-y` / TTY prompt / exit 2 piped).
+- [x] `server webhook-secrets list|create|rotate|delete` — auth webhook HMAC secrets; delete/rotate look up the full secret object from `--secret` (server requires it).
+- [x] `server doctor` — config (with sources) → connection → auth probe (`SELECT * FROM system:collections LIMIT 1`; "SELECT 1" is invalid DQL — FROM required — observed live). 401/403 → auth ✗; 400 → key accepted (auth happens before query parsing); unreachable → connection ✗. Exit 0/3.
+- [x] Rich `--help` on every command: request body shapes, wire formats, and examples (the APIs are mostly undocumented — help text is the documentation).
+- [x] Tests: `tests/unit/server-config.test.ts`, `server-client.test.ts`, `server-run.test.ts`, `server-doctor.test.ts`, `cli-server.test.ts`, `cli-server-branches.test.ts`; e2e `tests/e2e/server.test.ts` (node:http mock server, real subprocess; `extendEnv: false` — execa v10 renamed `extend`).
+- [x] `docs/testing-server.md` — manual checklist against the retail dataset in the portal.
+- [x] Verified against the real portal (retail app): SELECT/params/aggregates, EXPLAIN-as-statement, INSERT→SELECT→UPDATE→DELETE round-trip, doctor with good + bad keys.
+
+**Findings (verified live, documented in `--help` and `docs/testing-server.md`):**
+- Big Peer requires `FROM` in SELECT (`SELECT 1` → 400). Doctor probe uses `system:collections`.
+- execa v10: env isolation option is `extendEnv: false` (was `extend` in v9) — e2e spawns rely on it to stay hermetic now that the repo `.env` holds real portal credentials.
+
+**Not covered (deliberate):** JWT `http_login` exchange (API key is the CLI's model), CDC/Kafka streams (not request/response), no server-side REPL (one-shot + batch only).
+
+**Adversarial review: 5 rounds, 2 independent reviewers each, CONVERGED (both agreed).** Rounds 1–4 (~25 issues, each with regression tests): batch mode flattened auth/connection failures to exit 1 and retried dead servers (now exit 3 + stop); list commands validated `--format`/`--max-rows` after the network call (now exit 2, zero requests); `remote-execute --args -` hung on a TTY; URLs with userinfo/query/fragment were accepted (credential echo + misrouted paths — now rejected); mid-body timeouts escaped error mapping as raw `TimeoutError`; `roles list` silently truncated the cursor-paged wire shape (now `--cursor` + continuation note); 200-with-error bodies now fail closed (`assertNoErrorBody` everywhere except `execute`, whose errors need statement context); `stripEq` restricted to dual short/long options; `hasError(null)` per-peer crash. Reviewers also caught a false "lint clean" claim (empty `tail` output read as success) — gates are now verified by exit code.
+
+**Round 5 (fresh reviewers, agree-before-fixing rule — fixes only landed where both agreed after cross-verification):** fail-closed shape validation on ALL 2xx responses (execute/remote-execute require DQL hallmark keys; roles/users require their envelope keys — portal parity; webhook list keeps the portal's deliberate `[]` fallbacks incl. 404→`[]`); non-loopback `http://` rejected (the cloud's 308 made hop 1 cleartext-with-key, hop 2 anonymous → misleading 401); `--timeout` flag (default 120s) + `PortalTimeoutError` with honest "may still be running" message, exit 1 (the portal bounds only login/RBAC writes; DQL is unbounded there); unpasteable `roles create --help` example (single quotes can't nest) fixed to `\"…\"`; `.env` UTF-8 BOM strip; per-key .env hints; batch `stdoutBroken()` check; users-404 "unsupported endpoint" hint; `--permissions` blanket-string whitelist; e2e coverage gaps closed per the house convention (doctor, users, webhook-secrets, roles write, attachment upload, remote-execute happy path); docs/testing-server.md corrected (webhook §7 needs a pre-existing provider — verified live; attachment len 16; portable exit-code capture; `cut -d= -f2-`; ps/history warning for `--api-key`). README gained the full `dittosh server` feature section.
 
 ## Cross-cutting checklist (every milestone)
 
