@@ -2,6 +2,7 @@ import chalk from "chalk";
 import { Command, CommanderError } from "commander";
 import { rewriteDefaultSubcommand } from "./default-command.js";
 import { registerDqlGroup } from "./groups/dql/index.js";
+import { registerServerGroup } from "./groups/server/index.js";
 import { registerSkillsGroup } from "./groups/skills/index.js";
 import { registerSystemGroup } from "./groups/system/index.js";
 import { installStdoutGuard } from "./streams.js";
@@ -28,6 +29,9 @@ program
 
 const dql = program.command("dql");
 registerDqlGroup(dql);
+
+const server = program.command("server");
+registerServerGroup(server);
 
 const skills = program.command("skills");
 registerSkillsGroup(skills);

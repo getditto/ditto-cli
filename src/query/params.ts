@@ -16,22 +16,25 @@ export class ParamError extends Error {
  *  - `--args -`           read from stdin (the jq pipeline form)
  *  - `--args @file.json`  read from a file (curl-style)
  * The result is validated by parseParams (must be a JSON object).
+ * `flag` names the calling flag in error messages (the server group's
+ * --permissions reuses this).
  */
 export async function resolveArgsSource(
   value: string | undefined,
   readStdin: () => Promise<string>,
+  flag = "--args",
 ): Promise<string | undefined> {
   if (value === undefined) return undefined;
   if (value === "-") return readStdin();
   if (value.startsWith("@")) {
     const file = value.slice(1).trim();
     if (!file) {
-      throw new ParamError("--args @ requires a file path (e.g. --args @params.json)");
+      throw new ParamError(`${flag} @ requires a file path (e.g. ${flag} @params.json)`);
     }
     try {
       return fs.readFileSync(expandTilde(file), "utf8");
     } catch (err) {
-      throw new ParamError(`--args: cannot read ${file}: ${(err as Error).message}`);
+      throw new ParamError(`${flag}: cannot read ${file}: ${(err as Error).message}`);
     }
   }
   return value;
