@@ -21,10 +21,13 @@ Configuration (checked in this order — first hit wins):
 
 Find the URL in the portal: your app → "Connecting via HTTP" → Cloud URL
 Endpoint (looks like xxxx.cloud.dittolive.app/<app-id>). Create API keys under
-your app → Auth → New API key.
+your app → Auth → New API key. The URL must be https:// (cleartext http is
+rejected for non-local hosts — the key would transit unencrypted).
 
-Layers mix per key: a cwd .env URL + a shell-env API key sends that key to the
-.env's host. Run "dittosh server doctor" to see where each value came from.
+Prefer the env/.env layers over --api-key: argv is visible in ps and your
+shell history. Layers mix per key: a cwd .env URL + a shell-env API key sends
+that key to the .env's host. Run "dittosh server doctor" to see where each
+value came from.
 
 Endpoints covered (public docs + portal client):
   execute / remote-execute  DQL against the server / connected peers

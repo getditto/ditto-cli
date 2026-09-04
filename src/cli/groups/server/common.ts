@@ -6,6 +6,7 @@ import {
   PortalApiError,
   PortalClient,
   PortalConnectionError,
+  PortalTimeoutError,
 } from "../../../server/client.js";
 import {
   ApiVersionError,
@@ -24,7 +25,14 @@ export interface ServerOpts {
   apiKey?: string;
 }
 
-/** Commander keeps "=" in SHORT-option inline values (-e=x → "=x") — strip it. Never apply to long options: their values may legitimately start with "=". */
+/**
+ * Commander 14 keeps a leading "=" for dual short/long options in several
+ * forms (`-e=x`, `--execute==x`, even `--execute =x`) — strip exactly one.
+ * Only apply to dual short/long options (-e/-f/-o/-p). Trade-off: a value
+ * that legitimately starts with "=" loses it there (never a valid DQL
+ * statement; pathological for file paths). Long-only options must NOT be
+ * stripped.
+ */
 export const stripEq = (v?: string) => v?.replace(/^=/, "");
 
 /** Connection flags present on every server subcommand (env vars documented in each --help). */
@@ -76,7 +84,11 @@ export function connect(
 
 /** Map a client failure to stderr + exit code. Returns true when the error was handled. */
 export function reportServerError(err: unknown): boolean {
-  if (err instanceof PortalApiError || err instanceof PortalConnectionError) {
+  if (
+    err instanceof PortalApiError ||
+    err instanceof PortalConnectionError ||
+    err instanceof PortalTimeoutError
+  ) {
     console.error(chalk.red(err.message));
     process.exitCode = err.exitCode;
     return true;

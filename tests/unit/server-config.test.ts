@@ -257,3 +257,50 @@ describe("regression: bare ? / # are stripped, not just rejected", () => {
     expect(normalizeBaseUrl("https://host.example/app#")).toBe("https://host.example/app");
   });
 });
+
+describe("regression: cleartext http rejected off-loopback (round 3 agreed major)", () => {
+  it("rejects http:// for a remote host", () => {
+    expect(() => normalizeBaseUrl("http://6b1b5999.cloud.dittolive.app/app")).toThrow(
+      /cleartext http/,
+    );
+  });
+
+  it("allows http:// for loopback (local dev, e2e mocks)", () => {
+    expect(normalizeBaseUrl("http://localhost:8080/app")).toBe("http://localhost:8080/app");
+    expect(normalizeBaseUrl("http://127.0.0.1:8080/app")).toBe("http://127.0.0.1:8080/app");
+    expect(normalizeBaseUrl("http://[::1]:8080/app")).toBe("http://[::1]:8080/app");
+  });
+});
+
+describe("regression: .env BOM and per-key hints (round 3 agreed minors)", () => {
+  it("a UTF-8 BOM doesn't swallow the first variable", () => {
+    fs.writeFileSync(
+      path.join(dir, ".env"),
+      "﻿DITTOSH_SERVER_URL=bom.example/app\nDITTOSH_SERVER_API_KEY=bom-key\n",
+    );
+    const cfg = resolveServerConfig({}, {}, dir);
+    expect(cfg.baseUrl).toBe("https://bom.example/app");
+    expect(cfg.apiKey).toBe("bom-key");
+  });
+
+  it("the .env hint names only the MISSING key", () => {
+    writeEnv("DITTOSH_SERVER_URL=dotenv.example/app\n");
+    try {
+      resolveServerConfig({}, {}, dir);
+      expect.unreachable();
+    } catch (err) {
+      expect((err as Error).message).toContain("no usable DITTOSH_SERVER_API_KEY");
+      expect((err as Error).message).not.toContain("no usable DITTOSH_SERVER_URL");
+    }
+  });
+
+  it("a bad --api-version beats missing config (usage errors first)", () => {
+    try {
+      resolveServerConfig({ apiVersion: "v9" }, {}, dir);
+      expect.unreachable();
+    } catch (err) {
+      expect((err as Error).name).toBe("ApiVersionError");
+      expect((err as { exitCode: number }).exitCode).toBe(2);
+    }
+  });
+});

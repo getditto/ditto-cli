@@ -10,7 +10,7 @@ export type StatementKind =
   | "other";
 
 /** Strip leading whitespace and comments (loop-based — no backtracking regex). */
-function stripLeadingTrivia(s: string): string {
+export function stripLeadingTrivia(s: string): string {
   let rest = s;
   for (;;) {
     const trimmed = rest.replace(/^\s+/, "");

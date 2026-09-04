@@ -41,12 +41,28 @@ export class PortalApiError extends Error {
   }
 }
 
-/** No answer at all: DNS, refused, TLS, timeout. Treated as platform (exit 3). */
+/** No answer at all: DNS, refused, TLS. Treated as platform (exit 3). */
 export class PortalConnectionError extends Error {
   readonly exitCode = 3;
   constructor(message: string) {
     super(message);
     this.name = "PortalConnectionError";
+  }
+}
+
+/**
+ * The request's own timeout fired. NOT a connection error (exit 3): the server
+ * was reached and a mutation may still commit — the user must not assume
+ * failure. Query/API class (exit 1) with an honest message.
+ */
+export class PortalTimeoutError extends Error {
+  readonly exitCode = 1;
+  constructor(baseUrl: string, timeoutMs: number) {
+    super(
+      `No response within ${Math.round(timeoutMs / 1000)}s from ${baseUrl} — ` +
+        "the server may still be running the statement (raise with --timeout)",
+    );
+    this.name = "PortalTimeoutError";
   }
 }
 
@@ -127,15 +143,42 @@ export class PortalClient {
   /** Best-effort reason from a fetch failure: undici puts it in `cause` ("fetch failed" alone is useless); ECONNREFUSED on multi-address hosts yields an AggregateError with an empty message — dig one level. */
   private static failureReason(err: unknown): string {
     const e = err as Error & { cause?: unknown };
-    if (e.name === "TimeoutError" || e.name === "AbortError") return "timed out";
     const cause = e.cause as (Error & { errors?: Error[]; code?: string }) | undefined;
     return cause?.message || cause?.errors?.[0]?.message || cause?.code || e.message;
+  }
+
+  /** Our AbortSignal is the only abort source — an AbortError/TimeoutError IS the timeout. */
+  private static isTimeout(err: unknown): boolean {
+    const name = (err as Error).name;
+    return name === "TimeoutError" || name === "AbortError";
   }
 
   /** A 2xx body can still carry a DQL-style error envelope — check before trusting data. */
   private static assertNoErrorBody(status: number, data: unknown): void {
     const desc = (data as { error?: { description?: unknown } } | undefined)?.error?.description;
     if (typeof desc === "string" && desc) throw new PortalApiError(status, desc);
+  }
+
+  /**
+   * Fail closed on a 2xx whose body isn't the shape the endpoint contract
+   * promises (SSO/captive-portal HTML page, proxy error page, shape drift).
+   * The portal client does the same via its isDQLHTTPResponse/isGetRolesResponse
+   * guards. Only called where the response MUST be a JSON object.
+   */
+  private static assertResponseShape(
+    status: number,
+    data: unknown,
+    requirement: string,
+    ok: (obj: Record<string, unknown>) => boolean,
+  ): Record<string, unknown> {
+    if (typeof data !== "object" || data === null || !ok(data as Record<string, unknown>)) {
+      throw new PortalApiError(
+        status,
+        `Invalid response from Ditto Server (expected ${requirement}) — ` +
+          "if this URL goes through a proxy/SSO, it may have answered instead",
+      );
+    }
+    return data as Record<string, unknown>;
   }
 
   private async request(
@@ -146,6 +189,8 @@ export class PortalClient {
       form?: FormData;
       query?: Record<string, string | number | undefined>;
       txnId?: number;
+      /** Per-call timeout override (DQL statements legitimately run long). */
+      timeoutMs?: number;
     } = {},
     // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents
   ): Promise<{ status: number; data: unknown; text: string }> {
@@ -164,26 +209,29 @@ export class PortalClient {
       body = JSON.stringify(opts.body);
     }
 
+    const timeoutMs = opts.timeoutMs ?? this.timeoutMs;
     let res: Awaited<ReturnType<FetchLike>>;
     try {
       res = await this.fetchImpl(url.toString(), {
         method,
         headers,
         body,
-        signal: AbortSignal.timeout(this.timeoutMs),
+        signal: AbortSignal.timeout(timeoutMs),
       });
     } catch (err) {
+      if (PortalClient.isTimeout(err)) throw new PortalTimeoutError(this.baseUrl, timeoutMs);
       throw new PortalConnectionError(
         this.redact(`Cannot reach ${this.baseUrl} — ${PortalClient.failureReason(err)}`),
       );
     }
 
     // The body read can ALSO fail (mid-body timeout, connection reset while
-    // streaming) — same mapping, it's still a connection problem.
+    // streaming) — same mapping.
     let text: string;
     try {
       text = await res.text();
     } catch (err) {
+      if (PortalClient.isTimeout(err)) throw new PortalTimeoutError(this.baseUrl, timeoutMs);
       throw new PortalConnectionError(
         this.redact(`Cannot reach ${this.baseUrl} — ${PortalClient.failureReason(err)}`),
       );
@@ -199,8 +247,7 @@ export class PortalClient {
       const message =
         (data as { message?: string })?.message ??
         (data as { error?: { description?: string } })?.error?.description ??
-        text.trim() ??
-        "";
+        text.trim();
       throw new PortalApiError(
         res.status,
         this.redact(`HTTP ${res.status} from Ditto Server${message ? `: ${message}` : ""}`),
@@ -211,28 +258,51 @@ export class PortalClient {
 
   // ---- DQL ---------------------------------------------------------------
 
-  /** POST /api/{v4,v5}/store/execute — the primary DQL endpoint. */
+  /** POST /api/{v4,v5}/store/execute — the primary DQL endpoint. Fails closed on a non-DQL 2xx body. */
   async execute(
     statement: string,
     args?: Record<string, unknown>,
-    opts: { version?: ApiVersion; txnId?: number } = {},
+    opts: { version?: ApiVersion; txnId?: number; timeoutMs?: number } = {},
   ): Promise<ExecuteResponse> {
-    const { data } = await this.request("POST", `/api/${opts.version ?? "v5"}/store/execute`, {
-      body: { statement, ...(args ? { args } : {}) },
-      txnId: opts.txnId,
-    });
-    return (data ?? {}) as ExecuteResponse;
+    const { status, data } = await this.request(
+      "POST",
+      `/api/${opts.version ?? "v5"}/store/execute`,
+      {
+        body: { statement, ...(args ? { args } : {}) },
+        txnId: opts.txnId,
+        timeoutMs: opts.timeoutMs,
+      },
+    );
+    // A DQL response always carries at least one of these (portal: isDQLHTTPResponse).
+    const obj = PortalClient.assertResponseShape(status, data, "a DQL execute response", (o) =>
+      ["queryType", "items", "mutatedDocumentIds", "error", "warnings"].some((k) => k in o),
+    );
+    if (obj.items !== undefined && !Array.isArray(obj.items)) {
+      throw new PortalApiError(
+        status,
+        "Invalid response from Ditto Server (items is not an array)",
+      );
+    }
+    return obj as ExecuteResponse;
   }
 
   /** POST /api/v5/sync/remote_execute — run a DQL statement on connected peers (needs SYNC CONTEXT). */
   async remoteExecute(
     statement: string,
     args?: Record<string, unknown>,
+    opts: { timeoutMs?: number } = {},
   ): Promise<RemoteExecuteResponse> {
-    const { data } = await this.request("POST", "/api/v5/sync/remote_execute", {
+    const { status, data } = await this.request("POST", "/api/v5/sync/remote_execute", {
       body: { statement, ...(args ? { args } : {}) },
+      timeoutMs: opts.timeoutMs,
     });
-    return (data ?? {}) as RemoteExecuteResponse;
+    const obj = PortalClient.assertResponseShape(
+      status,
+      data,
+      "a remote_execute response (result array or error)",
+      (o) => Array.isArray(o.result) || o.error !== undefined,
+    );
+    return obj as RemoteExecuteResponse;
   }
 
   // ---- Attachments (v4) ----------------------------------------------------
@@ -241,7 +311,13 @@ export class PortalClient {
   async uploadAttachment(form: FormData): Promise<{ id?: string; len?: number }> {
     const { status, data } = await this.request("POST", "/api/v4/attachments/upload", { form });
     PortalClient.assertNoErrorBody(status, data);
-    return (data ?? {}) as { id?: string; len?: number };
+    const obj = PortalClient.assertResponseShape(
+      status,
+      data,
+      "an attachment upload response ({id, len})",
+      (o) => typeof o.id === "string",
+    );
+    return obj as { id?: string; len?: number };
   }
 
   /** GET /api/v4/attachments/{id} — raw bytes (arrayBuffer path; never text-decode binary). */
@@ -255,6 +331,7 @@ export class PortalClient {
         signal: AbortSignal.timeout(this.timeoutMs),
       });
     } catch (err) {
+      if (PortalClient.isTimeout(err)) throw new PortalTimeoutError(this.baseUrl, this.timeoutMs);
       throw new PortalConnectionError(
         this.redact(`Cannot reach ${this.baseUrl} — ${PortalClient.failureReason(err)}`),
       );
@@ -270,6 +347,7 @@ export class PortalClient {
         bytes = Buffer.from(await res.text(), "binary"); // test doubles without arrayBuffer
       }
     } catch (err) {
+      if (PortalClient.isTimeout(err)) throw new PortalTimeoutError(this.baseUrl, this.timeoutMs);
       throw new PortalConnectionError(
         this.redact(`Cannot reach ${this.baseUrl} — ${PortalClient.failureReason(err)}`),
       );
@@ -292,12 +370,16 @@ export class PortalClient {
 
   // ---- RBAC: roles & users (v4, as used by the portal) ---------------------
 
-  /** GET /api/v4/auth/roles — both known wire shapes returned raw; `cursor` continues a paged listing. */
+  /** GET /api/v4/auth/roles — both known wire shapes share the `roles` key; `cursor` continues a paged listing. */
   async listRoles(opts: { cursor?: string } = {}): Promise<unknown> {
     const { status, data } = await this.request("GET", "/api/v4/auth/roles", {
       query: { cursor: opts.cursor },
     });
     PortalClient.assertNoErrorBody(status, data);
+    // Portal parity: the reference throws on a roles-less envelope.
+    PortalClient.assertResponseShape(status, data, "a roles response ({roles: …})", (o) =>
+      Object.hasOwn(o, "roles"),
+    );
     return data;
   }
 
@@ -341,7 +423,14 @@ export class PortalClient {
       query: { userId: opts.userId, cursor: opts.cursor, limit: opts.limit },
     });
     PortalClient.assertNoErrorBody(status, data);
-    return (data ?? {}) as { users?: PortalUser[]; hasMore?: boolean; cursor?: string };
+    // Portal parity: normalizeUsersResponse throws on a malformed envelope.
+    const obj = PortalClient.assertResponseShape(
+      status,
+      data,
+      "a users response ({users: [...], hasMore: bool})",
+      (o) => Array.isArray(o.users) && typeof o.hasMore === "boolean",
+    );
+    return obj as { users?: PortalUser[]; hasMore?: boolean; cursor?: string };
   }
 
   /** PATCH /api/v4/auth/users/{id} — replace the user's whole role set. */
@@ -368,11 +457,19 @@ export class PortalClient {
 
   // ---- Auth webhook secrets (v4, as used by the portal) ---------------------
 
-  /** GET /api/v4/auth/webhook/secret?provider= — returns [] when none exist. */
+  /** GET /api/v4/auth/webhook/secret?provider= — returns [] when none exist (incl. 404 deployments, matching the portal). */
   async listWebhookSecrets(provider: string): Promise<WebhookSecret[]> {
-    const { status, data } = await this.request("GET", "/api/v4/auth/webhook/secret", {
-      query: { provider },
-    });
+    let status: number;
+    let data: unknown;
+    try {
+      ({ status, data } = await this.request("GET", "/api/v4/auth/webhook/secret", {
+        query: { provider },
+      }));
+    } catch (err) {
+      // The portal maps 404 → "no secrets" (rpcClient getWebhookSecrets).
+      if (err instanceof PortalApiError && err.status === 404) return [];
+      throw err;
+    }
     PortalClient.assertNoErrorBody(status, data);
     // The backend's shape varies: {} when empty, {secret: [...]}, a bare array,
     // or a single secret object (portal client normalizes the same way).

@@ -201,7 +201,9 @@ describe("server execute: more usage validation", () => {
   });
 
   it("unterminated single statement is sent as-is (no trailing-; rule over HTTP)", async () => {
-    const { program, calls } = buildProgram();
+    const { program, calls } = buildProgram(() => ({
+      body: { queryType: "unknown", items: [], mutatedDocumentIds: [], error: {}, warnings: [] },
+    }));
     await run(program, ["server", "execute", "SELECT 1 garbage here"]);
     expect(process.exitCode ?? 0).toBe(0); // single unterminated statement is sent as-is
     expect(calls).toHaveLength(1);
@@ -354,11 +356,11 @@ describe("server rbac: extra branches", () => {
     Object.assign(process.env, ENV);
   });
 
-  it("roles list: garbage body → empty table, exit 0", async () => {
+  it("roles list: garbage body → invalid-response error, exit 1 (fail closed)", async () => {
     const { program } = buildProgram(() => ({ body: "not-an-object" }));
     await run(program, ["server", "roles", "list"]);
-    expect(process.exitCode ?? 0).toBe(0);
-    expect(JSON.parse(stdout())).toEqual([]);
+    expect(process.exitCode).toBe(1);
+    expect(stderr()).toContain("Invalid response from Ditto Server");
   });
 
   it("roles create --permissions @file", async () => {
@@ -810,5 +812,70 @@ describe("regression: adversarial review", () => {
     await run(program, ["server", "doctor", "--api-version", "v9"]);
     expect(process.exitCode).toBe(2);
     expect(calls).toHaveLength(0);
+  });
+});
+
+describe("regression: round-3 agreed minors", () => {
+  beforeEach(() => {
+    Object.assign(process.env, ENV);
+  });
+
+  it("roles create --permissions with a non-blanket JSON string → exit 2 (no request)", async () => {
+    const { program, calls } = buildProgram();
+    await run(program, ["server", "roles", "create", "staff", "--permissions", '"not-a-blanket"']);
+    expect(process.exitCode).toBe(2);
+    expect(stderr()).toContain("--permissions must be");
+    expect(calls).toHaveLength(0);
+  });
+
+  it("roles create --permissions accepts a quoted blanket string", async () => {
+    const { program, calls } = buildProgram();
+    await run(program, ["server", "roles", "create", "staff", "--permissions", '"read_only"']);
+    expect(process.exitCode ?? 0).toBe(0);
+    expect(
+      (calls[0]!.body as { doc: { collection_permissions: string } }).doc.collection_permissions,
+    ).toBe("read_only");
+  });
+
+  it("execute --timeout abc → exit 2", async () => {
+    const { program, calls } = buildProgram();
+    await run(program, ["server", "execute", "SELECT 1", "--timeout", "abc"]);
+    expect(process.exitCode).toBe(2);
+    expect(stderr()).toContain("--timeout must be an integer");
+    expect(calls).toHaveLength(0);
+  });
+
+  it("remote-execute accepts SYNC CONTEXT behind a leading comment (after --)", async () => {
+    const { program, calls } = buildProgram(() => ({ body: { result: [] } }));
+    // A statement starting with "--" needs the -- separator so commander
+    // doesn't read it as an option (same rule as the dql group).
+    await run(program, [
+      "server",
+      "remote-execute",
+      "--",
+      "-- probe\nSYNC CONTEXT ( PEERS WHERE peerKeyString = 'x' ) SELECT 1",
+    ]);
+    expect(process.exitCode ?? 0).toBe(0);
+    expect(calls).toHaveLength(1);
+  });
+
+  it("remote-execute --timeout abc → exit 2", async () => {
+    const { program, calls } = buildProgram();
+    await run(program, [
+      "server",
+      "remote-execute",
+      "SYNC CONTEXT ( PEERS WHERE peerKeyString = 'x' ) SELECT 1",
+      "--timeout",
+      "abc",
+    ]);
+    expect(process.exitCode).toBe(2);
+    expect(calls).toHaveLength(0);
+  });
+
+  it("users list 404 → exit 1 with an unsupported-endpoint hint", async () => {
+    const { program } = buildProgram(() => ({ status: 404, body: { message: "Not Found" } }));
+    await run(program, ["server", "users", "list"]);
+    expect(process.exitCode).toBe(1);
+    expect(stderr()).toContain("may not support the users endpoint");
   });
 });

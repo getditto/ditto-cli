@@ -29,10 +29,11 @@ Two things that are **not** bugs:
   DITTOSH_SERVER_URL=https://xxxx.cloud.dittolive.app/your-app-id
   DITTOSH_SERVER_API_KEY=your-api-key
   ```
-  The `https://` is optional on the URL. Aliases `DITTO_CLOUD_URL` /
-  `DITTO_API_KEY` also work. Layers mix per key (a cwd `.env` URL + a shell-env
-  key sends that key to the `.env`'s host) — `dittosh server doctor` shows
-  where each value came from.
+  The `https://` prefix is added when missing; cleartext `http://` is rejected
+  for non-local hosts (the key would transit unencrypted — loopback is exempt
+  for local testing). Aliases `DITTO_CLOUD_URL` / `DITTO_API_KEY` also work.
+  Layers mix per key (a cwd `.env` URL + a shell-env key sends that key to the
+  `.env`'s host) — `dittosh server doctor` shows where each value came from.
 
 - [ ] **No config → exit 3 with guidance** (run from a directory with no
       `.env`):
@@ -126,9 +127,9 @@ Two things that are **not** bugs:
 
 - [ ] **DQL error → exit 1, stdout stays clean**
   ```bash
-  dittosh server execute "SELEC broken" | wc -c; echo "exit: ${pipestatus[1]}"
+  out=$(dittosh server execute "SELEC broken"); code=$?; echo "stdout bytes: ${#out}, exit: $code"
   ```
-  Expect: `0` bytes on stdout, `Query error: …` on stderr, exit 1.
+  Expect: `stdout bytes: 0, exit: 1`, `Query error: …` on stderr.
 
 - [ ] **Write round-trip on a scratch collection**
   ```bash
@@ -177,7 +178,7 @@ Two things that are **not** bugs:
   printf 'hello attachment' > /tmp/att.txt
   dittosh server attachment upload /tmp/att.txt
   ```
-  Expect: `{"id": "<attachment-id>", "len": 17}`.
+  Expect: `{"id": "<attachment-id>", "len": 16}`.
 
 - [ ] **Download round-trip**
   ```bash
@@ -213,7 +214,8 @@ Two things that are **not** bugs:
   echo | dittosh server roles delete dittosh-probe; echo "exit: $?"
   ```
 
-- [ ] **users list** (empty unless your app provisions users)
+- [ ] **users list** (needs auth/RBAC configured for the app — otherwise
+      `HTTP 404 … may not support the users endpoint`, exit 1)
   ```bash
   dittosh server users list --limit 50
   dittosh server users list --user-id "auth0|some-id"
@@ -227,22 +229,37 @@ Two things that are **not** bugs:
 
 ## 7. Webhook secrets — portal-internal, undocumented
 
-Destructive; only run against a throwaway provider name.
+**Prerequisite:** the provider must already exist — i.e. an auth webhook must
+be configured for the app (portal → app → Auth). This API cannot create
+providers: against a nonexistent provider, `list` and `create` both fail with
+`HTTP 400 … Provider '<name>' not found` (exit 1). Verified live.
 
-- [ ] **list (empty) → create → list → rotate → delete**
+Destructive — secrets sign your auth webhook traffic. Use a dedicated test
+provider, not your production one.
+
+- [ ] **Nonexistent provider → clean error**
   ```bash
-  dittosh server webhook-secrets list --provider dittosh-probe
-  dittosh server webhook-secrets create --provider dittosh-probe --not-after 2027-01-01T00:00:00Z
-  SECRET=$(dittosh server webhook-secrets list --provider dittosh-probe --format json | jq -r '.[0].secret')
-  dittosh server webhook-secrets rotate --provider dittosh-probe --secret "$SECRET" --not-after 2027-06-01T00:00:00Z
-  dittosh server webhook-secrets delete --provider dittosh-probe --secret "$SECRET" -y
+  dittosh server webhook-secrets list --provider definitely-not-a-provider; echo "exit: $?"
   ```
-  Expect: `{}`→`[]` initially; create prints the new secret JSON; rotate prints
-  the replacement secret; delete confirms on stderr.
+  Expect: `HTTP 400 … Provider 'definitely-not-a-provider' not found`, exit 1
+  (a 404 answers `[]` on older deployments).
+
+- [ ] **list → create → list → rotate → delete** (against an EXISTING test
+      provider — substitute its real name)
+  ```bash
+  PROVIDER=my-test-webhook
+  dittosh server webhook-secrets list --provider "$PROVIDER"
+  dittosh server webhook-secrets create --provider "$PROVIDER" --not-after 2027-01-01T00:00:00Z
+  SECRET=$(dittosh server webhook-secrets list --provider "$PROVIDER" --format json | jq -r '.[0].secret')
+  dittosh server webhook-secrets rotate --provider "$PROVIDER" --secret "$SECRET" --not-after 2027-06-01T00:00:00Z
+  dittosh server webhook-secrets delete --provider "$PROVIDER" --secret "$SECRET" -y
+  ```
+  Expect: existing secrets (or `[]`) initially; create prints the new secret
+  JSON; rotate prints the replacement secret; delete confirms on stderr.
 
 - [ ] **Validation: bad date → exit 2**
   ```bash
-  dittosh server webhook-secrets create --provider dittosh-probe --not-after someday; echo "exit: $?"
+  dittosh server webhook-secrets create --provider "$PROVIDER" --not-after someday; echo "exit: $?"
   ```
 
 ## 8. Config precedence
@@ -250,9 +267,12 @@ Destructive; only run against a throwaway provider name.
 - [ ] **Flags beat env beat .env**
   ```bash
   dittosh server execute "SELECT count(*) AS n FROM customers" \
-    --url "$(grep DITTOSH_SERVER_URL .env | cut -d= -f2)" --api-key "$(grep DITTOSH_SERVER_API_KEY .env | cut -d= -f2)"
+    --url "$(grep ^DITTOSH_SERVER_URL= .env | cut -d= -f2-)" \
+    --api-key "$(grep ^DITTOSH_SERVER_API_KEY= .env | cut -d= -f2-)"
   ```
-  Expect: normal result.
+  Expect: normal result. (`-f2-` keeps `=`-padding in the key.) Note that
+  `--api-key` on argv is visible in `ps` and your shell history — prefer the
+  env/.env layers for anything but throwaway shells.
 
 - [ ] **Bad --api-version → exit 2 before any request** (bad flag value = usage)
   ```bash

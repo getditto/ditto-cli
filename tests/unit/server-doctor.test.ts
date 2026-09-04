@@ -181,3 +181,40 @@ describe("server doctor", () => {
     }
   });
 });
+
+describe("regression: fail-closed probe (round 3 agreed major)", () => {
+  it("a 200 non-DQL body (proxy/SSO page) → auth NOT green", async () => {
+    const cwd = emptyCwd();
+    try {
+      const fetchImpl: FetchLike = async () => ({
+        status: 200,
+        statusText: "",
+        headers: { get: () => "text/html" },
+        text: async () => "<html>login</html>",
+      });
+      const checks = await collectServerDoctorChecks({ env: ENV, cwd, fetchImpl });
+      expect(checks[1]!.ok).toBe(true); // connection — something answered
+      expect(checks[2]!.ok).toBe(false); // auth must NOT claim success
+      expect(checks[2]!.detail).toContain("Invalid response from Ditto Server");
+    } finally {
+      rmrf(cwd);
+    }
+  });
+
+  it("a probe timeout → connection ✗, auth skipped", async () => {
+    const cwd = emptyCwd();
+    try {
+      const fetchImpl: FetchLike = async () => {
+        const err = new Error("The operation was aborted due to timeout");
+        err.name = "TimeoutError";
+        throw err;
+      };
+      const checks = await collectServerDoctorChecks({ env: ENV, cwd, fetchImpl });
+      expect(checks[1]).toMatchObject({ ok: false, label: "connection" });
+      expect(checks[1]!.detail).toContain("may still be running");
+      expect(checks[2]!.detail).toContain("skipped");
+    } finally {
+      rmrf(cwd);
+    }
+  });
+});

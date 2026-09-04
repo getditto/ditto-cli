@@ -20,6 +20,8 @@ export interface ServerRunOptions {
   params?: Record<string, unknown>;
   time?: boolean;
   pager?: boolean;
+  /** Per-request timeout override (ms) — DQL legitimately runs long. */
+  timeoutMs?: number;
   /** Injectable "stdout is a TTY" for tests. */
   stdoutIsTTY?: boolean;
   /** Injectable pager for tests. */
@@ -44,7 +46,8 @@ export function normalizeItems(items: unknown[]): Record<string, unknown>[] {
 /** Print the response's warnings on stderr (never stdout). */
 export function printWarnings(res: ExecuteResponse): void {
   for (const w of res.warnings ?? []) {
-    console.error(chalk.yellow(`warning: ${w.description}`));
+    // Off-contract warnings may lack `description` — never print "undefined".
+    console.error(chalk.yellow(`warning: ${w.description ?? JSON.stringify(w)}`));
   }
   const extra = (res.totalWarningsCount ?? 0) - (res.warnings?.length ?? 0);
   if (extra > 0) console.error(chalk.yellow(`…and ${extra} more warning(s)`));
@@ -112,12 +115,13 @@ export async function runServerExecute(
   statement: string,
   opts: ServerRunOptions & { apiVersion?: "v4" | "v5"; txnId?: number },
 ): Promise<ServerRunResult> {
-  // PortalApiError/PortalConnectionError propagate — the command layer maps
-  // them to exit codes (3 auth/connection, 1 query/API).
+  // PortalApiError/PortalConnectionError/PortalTimeoutError propagate — the
+  // command layer maps them to exit codes (3 auth/connection, 1 query/API/timeout).
   const started = performance.now();
   const res = await client.execute(statement, opts.params, {
     version: opts.apiVersion,
     txnId: opts.txnId,
+    timeoutMs: opts.timeoutMs,
   });
   const elapsedMs = performance.now() - started;
 
@@ -164,7 +168,7 @@ export async function runServerRemoteExecute(
   opts: ServerRunOptions,
 ): Promise<ServerRunResult> {
   const started = performance.now();
-  const res = await client.remoteExecute(statement, opts.params);
+  const res = await client.remoteExecute(statement, opts.params, { timeoutMs: opts.timeoutMs });
   const elapsedMs = performance.now() - started;
 
   // Same predicate as runServerExecute: ANY non-empty error object is a failure.
@@ -202,6 +206,7 @@ export async function runServerRemoteExecute(
 
   // Piped/JSON: the full per-peer envelope is the data. TTY: same JSON — peer
   // results don't flatten into one table without lying about provenance.
+  process.env.DITTOSH_JSON_OUT = "1"; // always-JSON stdout: keep the update banner off it
   const rendered = JSON.stringify(perPeer, null, 2);
   const page = opts.page ?? pageIfLong;
   if (!page(rendered, { disabled: opts.pager === false })) console.log(rendered);

@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import chalk from "chalk";
 import type { Command } from "commander";
-import { classify } from "../../../query/execute.js";
+import { classify, stripLeadingTrivia } from "../../../query/execute.js";
 import {
   ParamError,
   parseParams,
@@ -13,6 +13,7 @@ import { FormatError, resolveFormat } from "../../../render/output.js";
 import { PortalApiError, PortalConnectionError } from "../../../server/client.js";
 import type { ServerRunOptions } from "../../../server/run.js";
 import { runServerExecute, runServerRemoteExecute } from "../../../server/run.js";
+import { stdoutBroken } from "../../streams.js";
 import { validateOutPath } from "../dql/run.js";
 import {
   addServerOpts,
@@ -44,6 +45,7 @@ interface ExecOpts {
   pager?: boolean;
   time?: boolean;
   execute?: string;
+  timeout?: string;
 }
 
 function collectParam(value: string, previous: string[]): string[] {
@@ -79,6 +81,7 @@ function execRunOpts(
     pager: opts.pager,
     time: opts.time,
     txnId: parseTxnId(opts.txnId),
+    timeoutMs: parsePositiveInt(opts.timeout, "--timeout", 120) * 1000,
   };
 }
 
@@ -100,11 +103,13 @@ Any DQL works, including EXPLAIN / PROFILE / ADVISE as statements:
   dittosh server execute -f batch.sql --continue-on-error
 
 Notes:
-  - -o/--out is for row-producing statements (SELECT/EXPLAIN/PROFILE).
+  - -o/--out is for row-producing statements (SELECT/EXPLAIN/PROFILE/ADVISE).
     INSERT/UPDATE/DELETE … RETURNING does emit rows but is refused anyway
     (classified by its first keyword) — run it without -o.
   - In batch mode, auth/connection failures stop the batch with exit 3 even
     under --continue-on-error (a dead server won't heal mid-file).
+  - Statements get 120s by default (--timeout). A timeout does NOT mean the
+    statement failed — a mutation may still commit server-side.
 
 Exit codes: 0 ok · 1 DQL/API error · 2 usage · 3 config/auth/connection.`;
 
@@ -129,6 +134,7 @@ export function registerStoreCommands(server: Command, deps: ServerDeps = {}): v
       )
       .option("--api-version <version>", "v5 (default) or v4 (legacy strict mode)")
       .option("--txn-id <n>", "X-DITTO-TXN-ID: wait until the server reaches this transaction")
+      .option("--timeout <seconds>", "per-statement timeout (default 120; DQL can run long)")
       .option("-o, --out <path>", "write results to a file (format from extension or --format)")
       .option("--format <format>", "table | json | csv | markdown | html | vertical")
       .option("--max-rows <n>", "maximum rows to display", "10000")
@@ -229,7 +235,7 @@ export function registerStoreCommands(server: Command, deps: ServerDeps = {}): v
           if (statement && ["mutation", "ddl", "other"].includes(classify(statement))) {
             console.error(
               chalk.red(
-                "-o/--out only applies to row-producing statements (SELECT/EXPLAIN/PROFILE)",
+                "-o/--out only applies to row-producing statements (SELECT/EXPLAIN/PROFILE/ADVISE)",
               ),
             );
             process.exitCode = 2;
@@ -271,7 +277,7 @@ export function registerStoreCommands(server: Command, deps: ServerDeps = {}): v
         if (batchText !== undefined) {
           const statements = splitStatements(batchText);
           if (statements.length === 0) {
-            console.error(`No statements in ${batchSource}.`);
+            console.error(chalk.red(`No statements in ${batchSource}.`));
             process.exitCode = 2;
             return;
           }
@@ -289,7 +295,7 @@ export function registerStoreCommands(server: Command, deps: ServerDeps = {}): v
             if (["mutation", "ddl", "other"].includes(classify(statements[0]!))) {
               console.error(
                 chalk.red(
-                  "-o/--out only applies to row-producing statements (SELECT/EXPLAIN/PROFILE)",
+                  "-o/--out only applies to row-producing statements (SELECT/EXPLAIN/PROFILE/ADVISE)",
                 ),
               );
               process.exitCode = 2;
@@ -307,6 +313,7 @@ export function registerStoreCommands(server: Command, deps: ServerDeps = {}): v
           let fatal = false; // auth/connection: won't heal mid-batch — stop regardless of --continue-on-error
           const statements = splitStatements(batchText);
           for (const stmt of statements) {
+            if (stdoutBroken()) break; // reader went away mid-batch (| head) — stop quietly
             try {
               const r = await runServerExecute(conn.client, stmt, {
                 ...runOpts,
@@ -365,6 +372,7 @@ export function registerStoreCommands(server: Command, deps: ServerDeps = {}): v
         "bind parameters from a JSON object ('-' reads stdin, '@file' reads a file)",
       )
       .option("--time", "print timing after the results", false)
+      .option("--timeout <seconds>", "timeout for the remote fan-out (default 120)")
       .option("--no-pager", "never pipe results through $PAGER/less"),
   )
     .addHelpText(
@@ -373,6 +381,10 @@ export function registerStoreCommands(server: Command, deps: ServerDeps = {}): v
 The statement MUST start with a SYNC CONTEXT clause naming the target peers
 (undocumented in the public API reference — taken from the portal client):
   SYNC CONTEXT ( PEERS WHERE peerKeyString = '<peer-key>' ) SELECT * FROM cars
+
+Leading comments/whitespace are fine; a statement starting with "--" needs the
+-- separator so it's not parsed as a flag:
+  dittosh server remote-execute -- "-- comment\nSYNC CONTEXT (…) SELECT …"
 
 Output is always a JSON array, one entry per responding peer:
   [ { "peer": …, "elapsedMilliseconds": n, "items": [ …rows… ] } ]
@@ -388,8 +400,9 @@ Example:
           param: opts.param?.map((p) => p.replace(/^=/, "")),
         };
         let params: Record<string, unknown> | undefined;
+        let timeoutMs: number;
         try {
-          if (!/^\s*SYNC\s+CONTEXT/i.test(statement)) {
+          if (!/^SYNC\s+CONTEXT/i.test(stripLeadingTrivia(statement))) {
             throw new ParamError(
               "remote-execute statements must start with a SYNC CONTEXT clause, e.g.\n" +
                 "  SYNC CONTEXT ( PEERS WHERE peerKeyString = '<peer-key>' ) SELECT ...",
@@ -402,6 +415,7 @@ Example:
           }
           const argsJson = await resolveArgsSource(opts.args, readStdinText);
           params = parseParams(opts.param, argsJson);
+          timeoutMs = parsePositiveInt(opts.timeout, "--timeout", 120) * 1000;
         } catch (err) {
           if (err instanceof ParamError) {
             console.error(chalk.red(err.message));
@@ -418,6 +432,7 @@ Example:
           params,
           pager: opts.pager,
           time: opts.time,
+          timeoutMs,
         });
         if (!r.ok) process.exitCode = 1;
       }),

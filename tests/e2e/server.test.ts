@@ -382,3 +382,225 @@ describe("e2e: dittosh server admin commands against the mock", () => {
     }
   });
 });
+
+describe("e2e: dittosh server doctor", () => {
+  it("all checks green against the mock", async () => {
+    const r = await cli(["server", "doctor"]);
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain("✓ config");
+    expect(r.stdout).toContain("✓ connection");
+    expect(r.stdout).toContain("✓ auth");
+    expect(requests.at(-1)!.url).toBe("/app-id/api/v5/store/execute");
+    expect(JSON.parse(requests.at(-1)!.body)).toEqual({
+      statement: "SELECT * FROM system:collections LIMIT 1",
+    });
+  });
+
+  it("401 → exit 3, auth fails", async () => {
+    const prev = responder;
+    responder = (_req, res) => {
+      res.writeHead(401, { "content-type": "application/json" });
+      res.end(JSON.stringify({ message: "unauthorized" }));
+    };
+    try {
+      const r = await cli(["server", "doctor"]);
+      expect(r.exitCode).toBe(3);
+      expect(r.stdout).toContain("✗ auth");
+    } finally {
+      responder = prev;
+    }
+  });
+});
+
+describe("e2e: dittosh server RBAC + webhook writes against the mock", () => {
+  it("roles create → delete round trip", async () => {
+    const prev = responder;
+    responder = (_req, res) => {
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({}));
+    };
+    try {
+      const c = await cli([
+        "server",
+        "roles",
+        "create",
+        "staff",
+        "--description",
+        "Store staff",
+        "--permissions",
+        "read_only",
+      ]);
+      expect(c.exitCode).toBe(0);
+      const createReq = requests.at(-1)!;
+      expect(createReq.method).toBe("POST");
+      expect(JSON.parse(createReq.body)).toEqual({
+        name: "staff",
+        doc: {
+          roles_version: "v1-preview",
+          description: "Store staff",
+          collection_permissions: "read_only",
+          grant_remote_query: false,
+        },
+      });
+
+      const d = await cli(["server", "roles", "delete", "staff", "-y"]);
+      expect(d.exitCode).toBe(0);
+      expect(requests.at(-1)!.method).toBe("DELETE");
+      expect(requests.at(-1)!.url).toBe("/app-id/api/v4/auth/roles/staff");
+    } finally {
+      responder = prev;
+    }
+  });
+
+  it("users list / set-roles / delete", async () => {
+    const prev = responder;
+    responder = (req, res) => {
+      res.writeHead(200, { "content-type": "application/json" });
+      if (req.url.includes("/auth/users") && req.method === "GET") {
+        res.end(
+          JSON.stringify({
+            users: [{ userId: "auth0|1", roles: ["staff"], identityVersion: "v1" }],
+            hasMore: false,
+          }),
+        );
+      } else if (req.method === "PATCH") {
+        res.end(JSON.stringify({ identityVersion: "v2", transactionId: 12 }));
+      } else {
+        res.end(JSON.stringify({}));
+      }
+    };
+    try {
+      const l = await cli(["server", "users", "list"]);
+      expect(l.exitCode).toBe(0);
+      expect(JSON.parse(l.stdout)).toEqual([
+        { userId: "auth0|1", roles: ["staff"], identityVersion: "v1" },
+      ]);
+
+      const s = await cli(["server", "users", "set-roles", "auth0|1", "staff", "ops"]);
+      expect(s.exitCode).toBe(0);
+      expect(JSON.parse(requests.at(-1)!.body)).toEqual({ roles: ["staff", "ops"] });
+      expect(JSON.parse(s.stdout).transactionId).toBe(12);
+
+      const d = await cli(["server", "users", "delete", "auth0|1", "-y"]);
+      expect(d.exitCode).toBe(0);
+      expect(requests.at(-1)!.method).toBe("DELETE");
+    } finally {
+      responder = prev;
+    }
+  });
+
+  it("webhook-secrets list → create → rotate → delete against the mock", async () => {
+    const existing = { secret: "s1", notBefore: "a", notAfter: "b" };
+    const prev = responder;
+    responder = (req, res) => {
+      res.writeHead(200, { "content-type": "application/json" });
+      if (req.method === "GET") {
+        res.end(JSON.stringify({ secret: [existing] }));
+      } else if (req.method === "POST") {
+        res.end(JSON.stringify({ secret: "created-secret", notBefore: "x", notAfter: "y" }));
+      } else if (req.method === "PATCH") {
+        res.end(JSON.stringify({ secret: "rotated-secret", notBefore: "x", notAfter: "z" }));
+      } else {
+        res.end(JSON.stringify({}));
+      }
+    };
+    try {
+      const l = await cli(["server", "webhook-secrets", "list", "--provider", "p1"]);
+      expect(l.exitCode).toBe(0);
+      expect(JSON.parse(l.stdout)[0].secret).toBe("s1");
+
+      const c = await cli([
+        "server",
+        "webhook-secrets",
+        "create",
+        "--provider",
+        "p1",
+        "--not-after",
+        "2027-01-01T00:00:00Z",
+      ]);
+      expect(c.exitCode).toBe(0);
+      expect(JSON.parse(c.stdout).secret).toBe("created-secret");
+
+      const ro = await cli([
+        "server",
+        "webhook-secrets",
+        "rotate",
+        "--provider",
+        "p1",
+        "--secret",
+        "s1",
+        "--not-after",
+        "2027-06-01T00:00:00Z",
+      ]);
+      expect(ro.exitCode).toBe(0);
+      expect(JSON.parse(ro.stdout).secret).toBe("rotated-secret");
+      const patch = requests.at(-1)!;
+      expect(JSON.parse(patch.body).rotate).toEqual(existing);
+
+      const d = await cli([
+        "server",
+        "webhook-secrets",
+        "delete",
+        "--provider",
+        "p1",
+        "--secret",
+        "s1",
+        "-y",
+      ]);
+      expect(d.exitCode).toBe(0);
+      const del = requests.at(-1)!;
+      expect(del.method).toBe("DELETE");
+      expect(JSON.parse(del.body)).toEqual({ provider: "p1", ...existing });
+    } finally {
+      responder = prev;
+    }
+  });
+
+  it("attachment upload posts multipart and prints {id, len}", async () => {
+    const fs = await import("node:fs");
+    const os = await import("node:os");
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "dittosh-e2e-att-"));
+    const file = path.join(dir, "blob.bin");
+    fs.writeFileSync(file, Buffer.from([1, 2, 3, 4]));
+    const prev = responder;
+    responder = (_req, res) => {
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ id: "att-9", len: 4 }));
+    };
+    try {
+      const r = await cli(["server", "attachment", "upload", file]);
+      expect(r.exitCode).toBe(0);
+      expect(JSON.parse(r.stdout)).toEqual({ id: "att-9", len: 4 });
+      expect(requests.at(-1)!.url).toBe("/app-id/api/v4/attachments/upload");
+    } finally {
+      responder = prev;
+      rmrf(dir);
+    }
+  });
+
+  it("remote-execute happy path renders the per-peer envelope", async () => {
+    const prev = responder;
+    responder = (_req, res) => {
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(
+        JSON.stringify({
+          result: [{ peer: { peerKeyString: "pk1" }, elapsedMilliseconds: 5, items: [{ a: 1 }] }],
+        }),
+      );
+    };
+    try {
+      const r = await cli([
+        "server",
+        "remote-execute",
+        "SYNC CONTEXT ( PEERS WHERE peerKeyString = 'pk1' ) SELECT * FROM cars LIMIT 5",
+      ]);
+      expect(r.exitCode).toBe(0);
+      const parsed = JSON.parse(r.stdout);
+      expect(parsed[0].peer.peerKeyString).toBe("pk1");
+      expect(parsed[0].items).toEqual([{ a: 1 }]);
+      expect(requests.at(-1)!.url).toBe("/app-id/api/v5/sync/remote_execute");
+    } finally {
+      responder = prev;
+    }
+  });
+});

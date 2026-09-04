@@ -2,7 +2,7 @@ import chalk from "chalk";
 import type { Command } from "commander";
 import { ParamError, parsePositiveInt, resolveArgsSource } from "../../../query/params.js";
 import { FormatError, resolveFormat } from "../../../render/output.js";
-import type { PortalUser, RoleDoc } from "../../../server/client.js";
+import { PortalApiError, type PortalUser, type RoleDoc } from "../../../server/client.js";
 import { emitRows } from "../../../server/run.js";
 import { note } from "../dql/run.js";
 import {
@@ -193,8 +193,10 @@ POST creates OR REPLACES the role. Omitted flags send explicit defaults
 --permissions is either a blanket string or a map of collection → read/write
 sides, each side true | false | a list of DQL WHERE clauses (any match grants):
   --permissions read_only
-  --permissions '{"cars": {"read": true, "write": ["_id == \\'car-1\\'"]}}'
+  --permissions '{"cars": {"read": true, "write": ["_id == "car-1""]}}'
   --permissions @role.json
+  (single-quoted shell strings can't contain escaped single quotes — write
+  DQL string literals with "double quotes" inside the JSON, as above)
 
 Examples:
   dittosh server roles create staff --description "Store staff" --permissions read_only
@@ -222,8 +224,9 @@ Examples:
               const parsed = BLANKETS.includes(raw!.trim())
                 ? raw!.trim()
                 : parseJsonFlag(raw!, "--permissions");
+              const isBlanket = typeof parsed === "string" && BLANKETS.includes(parsed);
               if (
-                typeof parsed !== "string" &&
+                !isBlanket &&
                 (typeof parsed !== "object" || parsed === null || Array.isArray(parsed))
               ) {
                 throw new ParamError(
@@ -346,11 +349,27 @@ Example:
           }
           const conn = connect(opts, deps);
           if (!conn) return;
-          const page = await conn.client.listUsers({
-            userId: opts.userId,
-            cursor: opts.cursor,
-            limit,
-          });
+          let page: Awaited<ReturnType<typeof conn.client.listUsers>>;
+          try {
+            page = await conn.client.listUsers({
+              userId: opts.userId,
+              cursor: opts.cursor,
+              limit,
+            });
+          } catch (err) {
+            // The portal treats 404 on these endpoints as "unsupported" — the
+            // route is absent when auth/RBAC isn't configured for the app.
+            if (err instanceof PortalApiError && err.status === 404) {
+              console.error(
+                chalk.red(
+                  `${err.message} — this deployment may not support the users endpoint (auth/RBAC not configured for the app)`,
+                ),
+              );
+              process.exitCode = 1;
+              return;
+            }
+            throw err;
+          }
           const r = emitRows(
             normalizeUsers(page.users),
             {

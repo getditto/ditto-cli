@@ -30,6 +30,19 @@ export class ApiVersionError extends Error {
   }
 }
 
+/** Loopback hosts where cleartext http is fine (local dev servers, e2e mocks). */
+function isLoopback(hostname: string): boolean {
+  const h = hostname.toLowerCase();
+  return (
+    h === "localhost" ||
+    h === "[::1]" ||
+    h === "::1" ||
+    h === "0:0:0:0:0:0:0:1" ||
+    h.startsWith("127.") ||
+    h.endsWith(".localhost")
+  );
+}
+
 export type ApiVersion = "v4" | "v5";
 
 export type ConfigSource = "flag" | "env" | "dotenv";
@@ -56,7 +69,9 @@ export function readDotEnv(cwd: string = process.cwd()): Record<string, string> 
   try {
     const file = path.join(cwd, ".env");
     if (!fs.existsSync(file) || !fs.statSync(file).isFile()) return {};
-    const parsed = parseEnv(fs.readFileSync(file, "utf8"));
+    // Strip a UTF-8 BOM — parseEnv would otherwise glue it onto the FIRST key
+    // ("\uFEFFDITTOSH_SERVER_URL"), silently losing that variable.
+    const parsed = parseEnv(fs.readFileSync(file, "utf8").replace(/^\uFEFF/, ""));
     return Object.fromEntries(
       Object.entries(parsed).filter((e): e is [string, string] => e[1] !== undefined),
     );
@@ -98,6 +113,15 @@ export function normalizeBaseUrl(raw: string): string {
   if (url.protocol !== "https:" && url.protocol !== "http:") {
     throw new ServerConfigError(`Invalid server URL "${raw}" — only http(s) URLs are supported`);
   }
+  // Cleartext http is only legitimate for loopback (local dev/test servers):
+  // the real cloud 308-redirects http→https, and the FIRST request would carry
+  // the API key unencrypted (the redirect then strips it → a misleading 401).
+  if (url.protocol === "http:" && !isLoopback(url.hostname)) {
+    throw new ServerConfigError(
+      `Refusing cleartext http:// for a non-local host (${url.hostname}) — the API key would be sent unencrypted. ` +
+        "Use https:// (loopback addresses are exempt for local testing).",
+    );
+  }
   // Reject anything that would corrupt request paths or leak secrets into
   // printed URLs: userinfo, query strings, fragments.
   if (url.username || url.password) {
@@ -132,20 +156,26 @@ export function resolveServerConfig(
   env: NodeJS.ProcessEnv = process.env,
   cwd: string = process.cwd(),
 ): ServerConfig {
+  // Usage errors (bad flag VALUES) beat config-absence errors.
+  const apiVersion = resolveApiVersion(flags.apiVersion);
+
   const dotEnv = readDotEnv(cwd);
 
-  // Hint when a .env exists but yielded nothing — otherwise "no config" is
-  // confusing when the file is right there (unreadable, or wrong var names).
-  const dotEnvHint = fs.existsSync(path.join(cwd, ".env"))
-    ? "\n(Note: a .env exists in the current directory but provided no usable DITTOSH_SERVER_* values — unreadable, or wrong variable names.)"
-    : "";
+  // Hint when a .env exists but the missing value wasn't in it — otherwise
+  // "no config" is confusing when the file is right there (unreadable, or
+  // wrong var names). Per-key: only claim uselessness for the MISSING one.
+  const dotEnvExists = fs.existsSync(path.join(cwd, ".env"));
+  const dotEnvHint = (missing: string) =>
+    dotEnvExists
+      ? `\n(Note: a .env exists in the current directory but provided no usable ${missing} — unreadable, or wrong variable name.)`
+      : "";
 
   const rawUrl = pick(flags.url, ["DITTOSH_SERVER_URL", "DITTO_CLOUD_URL"], env, dotEnv);
   if (!rawUrl) {
     throw new ServerConfigError(
       "No Ditto Server URL configured. Set DITTOSH_SERVER_URL (shell or .env) or pass --url.\n" +
         'Find it in the portal: your app → "Connecting via HTTP" → Cloud URL Endpoint ' +
-        `(looks like xxxx.cloud.dittolive.app/<app-id>).${dotEnvHint}`,
+        `(looks like xxxx.cloud.dittolive.app/<app-id>).${dotEnvHint("DITTOSH_SERVER_URL")}`,
     );
   }
 
@@ -153,14 +183,14 @@ export function resolveServerConfig(
   if (!apiKey) {
     throw new ServerConfigError(
       "No Ditto Server API key configured. Set DITTOSH_SERVER_API_KEY (shell or .env) or pass --api-key.\n" +
-        `Create one in the portal: your app → Auth → New API key.${dotEnvHint}`,
+        `Create one in the portal: your app → Auth → New API key.${dotEnvHint("DITTOSH_SERVER_API_KEY")}`,
     );
   }
 
   return {
     baseUrl: normalizeBaseUrl(rawUrl.value),
     apiKey: apiKey.value,
-    apiVersion: resolveApiVersion(flags.apiVersion),
+    apiVersion,
     sources: { url: rawUrl.source, apiKey: apiKey.source },
   };
 }

@@ -4,6 +4,7 @@ import {
   PortalApiError,
   PortalClient,
   PortalConnectionError,
+  PortalTimeoutError,
 } from "../../src/server/client.js";
 
 interface CapturedCall {
@@ -58,7 +59,7 @@ describe("PortalClient request plumbing", () => {
   });
 
   it("includes args only when provided", async () => {
-    const { fetchImpl, calls } = mockFetch();
+    const { fetchImpl, calls } = mockFetch(() => ({ body: { queryType: "select", items: [] } }));
     const client = makeClient(fetchImpl);
     await client.execute("SELECT * FROM cars WHERE color = :c", { c: "blue" });
     expect(JSON.parse(calls[0]!.body as string)).toEqual({
@@ -68,14 +69,14 @@ describe("PortalClient request plumbing", () => {
   });
 
   it("honors the v4 API version", async () => {
-    const { fetchImpl, calls } = mockFetch();
+    const { fetchImpl, calls } = mockFetch(() => ({ body: { queryType: "select", items: [] } }));
     const client = makeClient(fetchImpl);
     await client.execute("SELECT 1", undefined, { version: "v4" });
     expect(calls[0]!.url).toContain("/api/v4/store/execute");
   });
 
   it("sets X-DITTO-TXN-ID when asked", async () => {
-    const { fetchImpl, calls } = mockFetch();
+    const { fetchImpl, calls } = mockFetch(() => ({ body: { queryType: "select", items: [] } }));
     const client = makeClient(fetchImpl);
     await client.execute("SELECT 1", undefined, { txnId: 17 });
     expect(calls[0]!.headers["X-DITTO-TXN-ID"]).toBe("17");
@@ -356,7 +357,7 @@ describe("PortalClient webhook secrets", () => {
 });
 
 describe("regression: adversarial review fixes", () => {
-  it("mid-body timeout (text() rejects) maps to PortalConnectionError exit 3", async () => {
+  it("mid-body timeout (text() rejects) maps to PortalTimeoutError exit 1 with an honest message", async () => {
     const fetchImpl: FetchLike = async () => ({
       status: 200,
       statusText: "",
@@ -369,9 +370,22 @@ describe("regression: adversarial review fixes", () => {
     });
     const client = makeClient(fetchImpl);
     const err = await client.execute("SELECT 1").catch((e: unknown) => e);
-    expect(err).toBeInstanceOf(PortalConnectionError);
-    expect((err as PortalConnectionError).exitCode).toBe(3);
-    expect((err as Error).message).toContain("timed out");
+    expect(err).toBeInstanceOf(PortalTimeoutError);
+    expect((err as PortalTimeoutError).exitCode).toBe(1);
+    // honest: NOT "cannot reach" — the server was reached and may still be running
+    expect((err as Error).message).toContain("may still be running");
+    expect((err as Error).message).not.toContain("Cannot reach");
+  });
+
+  it("a fetch-level AbortError (our AbortSignal) is also PortalTimeoutError", async () => {
+    const fetchImpl: FetchLike = async () => {
+      const err = new Error("This operation was aborted");
+      err.name = "AbortError";
+      throw err;
+    };
+    const client = makeClient(fetchImpl);
+    const err = await client.execute("SELECT 1").catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(PortalTimeoutError);
   });
 
   it("undici's 'fetch failed' surfaces the cause reason (ENOTFOUND etc.)", async () => {
@@ -461,5 +475,99 @@ describe("regression: AggregateError cause (ECONNREFUSED on localhost)", () => {
     await expect(
       client.deleteWebhookSecret({ provider: "p", secret: "s", notBefore: "a", notAfter: "b" }),
     ).rejects.toBeInstanceOf(PortalApiError);
+  });
+});
+
+describe("regression: fail-closed 2xx shape validation (round 3 agreed major)", () => {
+  it("execute: a 200 with no DQL hallmark keys → PortalApiError, not silent []", async () => {
+    const { fetchImpl } = mockFetch(() => ({ body: { foo: 1 } }));
+    const err = await makeClient(fetchImpl)
+      .execute("SELECT 1")
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(PortalApiError);
+    expect((err as Error).message).toContain("Invalid response from Ditto Server");
+  });
+
+  it("execute: a 200 HTML page (proxy/SSO interstitial) → PortalApiError", async () => {
+    const { fetchImpl } = mockFetch(() => ({ text: "<html>login</html>" }));
+    const err = await makeClient(fetchImpl)
+      .execute("SELECT * FROM customers")
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(PortalApiError);
+    expect((err as Error).message).toContain("proxy/SSO");
+  });
+
+  it("execute: 200 with items of the wrong type → PortalApiError (not a raw TypeError)", async () => {
+    const { fetchImpl } = mockFetch(() => ({ body: { items: "not-an-array" } }));
+    const err = await makeClient(fetchImpl)
+      .execute("SELECT 1")
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(PortalApiError);
+    expect((err as Error).message).toContain("items is not an array");
+  });
+
+  it("execute: error-only envelopes are valid (DQL error body)", async () => {
+    const { fetchImpl } = mockFetch(() => ({
+      body: {
+        queryType: "unknown",
+        items: [],
+        mutatedDocumentIds: [],
+        error: { description: "x" },
+        warnings: [],
+      },
+    }));
+    const res = await makeClient(fetchImpl).execute("SELEC");
+    expect(res.error?.description).toBe("x");
+  });
+
+  it("remoteExecute: requires a result array or an error", async () => {
+    const { fetchImpl } = mockFetch(() => ({ body: { nope: true } }));
+    const err = await makeClient(fetchImpl)
+      .remoteExecute("SYNC CONTEXT ( PEERS WHERE peerKeyString = 'x' ) SELECT 1")
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(PortalApiError);
+
+    const ok = mockFetch(() => ({ body: { result: [] } }));
+    await expect(
+      makeClient(ok.fetchImpl).remoteExecute("SYNC CONTEXT (…) SELECT 1"),
+    ).resolves.toEqual({ result: [] });
+
+    const errBody = mockFetch(() => ({ body: { error: { description: "no peers" } } }));
+    await expect(
+      makeClient(errBody.fetchImpl).remoteExecute("SYNC CONTEXT (…) SELECT 1"),
+    ).resolves.toEqual({ error: { description: "no peers" } });
+  });
+
+  it("listRoles: a roles-less body → PortalApiError (portal parity)", async () => {
+    const { fetchImpl } = mockFetch(() => ({ body: { unexpected: 1 } }));
+    const err = await makeClient(fetchImpl)
+      .listRoles()
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(PortalApiError);
+    expect((err as Error).message).toContain("roles response");
+  });
+
+  it("listUsers: a malformed envelope → PortalApiError (portal parity)", async () => {
+    const { fetchImpl } = mockFetch(() => ({ body: { users: [] } })); // no hasMore
+    const err = await makeClient(fetchImpl)
+      .listUsers()
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(PortalApiError);
+    expect((err as Error).message).toContain("users response");
+  });
+
+  it("uploadAttachment: a 200 without an id → PortalApiError (no false { } success)", async () => {
+    const { fetchImpl } = mockFetch(() => ({ body: { unexpected: true } }));
+    const form = new FormData();
+    form.append("file", new Blob([new Uint8Array([1])]), "x.bin");
+    const err = await makeClient(fetchImpl)
+      .uploadAttachment(form)
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(PortalApiError);
+  });
+
+  it("listWebhookSecrets: 404 → [] (portal parity)", async () => {
+    const { fetchImpl } = mockFetch(() => ({ status: 404, body: { message: "not found" } }));
+    await expect(makeClient(fetchImpl).listWebhookSecrets("p")).resolves.toEqual([]);
   });
 });

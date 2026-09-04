@@ -3,6 +3,7 @@ import {
   PortalApiError,
   PortalClient,
   PortalConnectionError,
+  PortalTimeoutError,
 } from "../../../server/client.js";
 import {
   type ConfigSource,
@@ -101,9 +102,14 @@ export async function collectServerDoctorChecks(
         : `API key accepted — probe query ran (transactionId ${res.transactionId ?? "?"})`,
     });
   } catch (err) {
-    if (err instanceof PortalConnectionError) {
+    if (err instanceof PortalConnectionError || err instanceof PortalTimeoutError) {
       checks.push({ ok: false, label: "connection", detail: err.message });
-      checks.push(skipped("auth", "server unreachable"));
+      checks.push(
+        skipped(
+          "auth",
+          err instanceof PortalTimeoutError ? "probe timed out" : "server unreachable",
+        ),
+      );
     } else if (err instanceof PortalApiError) {
       checks.push({ ok: true, label: "connection", detail: `reached ${config.baseUrl}` });
       if (err.status === 401 || err.status === 403) {
