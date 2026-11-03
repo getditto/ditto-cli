@@ -15,7 +15,7 @@ The Ditto CLI: an npm/Homebrew-installable TypeScript CLI (binary `dittosh` — 
 
 ## Layout
 
-- `src/cli/` — commander entry (`index.ts`), injected version (`version.ts`, tsup `define`), `groups/` per command group (`dql`, later `skills`, `system`)
+- `src/cli/` — commander entry (`index.ts`), injected version (`version.ts`, tsup `define`), `groups/` per command group (`dql`, `skills`, `system`)
 - `src/config/` — data-dir resolution (`--data-dir` > `DITTOSH_DATA_DIR` > OS default), config dir (`DITTOSH_CONFIG_DIR` > OS default; env-paths caches homedir at module load, so tests must use this override, not `$HOME`), persisted state (one-time warnings, update cache)
 - `src/identity/` — token loading (dev env / release reassembly), expiry
 - `src/ditto/session.ts` — the only SDK touchpoint: init/open/close, log taming, lock mapping

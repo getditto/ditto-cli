@@ -23,14 +23,23 @@ interface RunResult {
   stderr: string;
 }
 
-/** Build a real codeload-shaped fixture tarball with a minimal dql skill. */
+/** Build a real codeload-shaped fixture tarball with three skills. */
 async function makeFixture(): Promise<string> {
   const src = tmpDataDir("ditto-e2e-tar-src-");
   const root = "getditto-agent-skills-fixture";
-  const skillDir = path.join(src, root, "skills", "dql");
-  fs.mkdirSync(path.join(skillDir, "references"), { recursive: true });
-  fs.writeFileSync(path.join(skillDir, "SKILL.md"), "# dql skill\nUse DQL like a pro.\n", "utf8");
-  fs.writeFileSync(path.join(skillDir, "references", "indexing.md"), "# indexing\n", "utf8");
+  const writeSkill = (name: string, extra: Record<string, string> = {}) => {
+    const dir = path.join(src, root, "skills", name);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, "SKILL.md"), `# ${name} skill\n`, "utf8");
+    for (const [rel, content] of Object.entries(extra)) {
+      const full = path.join(dir, rel);
+      fs.mkdirSync(path.dirname(full), { recursive: true });
+      fs.writeFileSync(full, content, "utf8");
+    }
+  };
+  writeSkill("write-dql", { "references/indexing.md": "# indexing\n" });
+  writeSkill("swift-sdk", { "references/lifetimes.md": "# lifetimes\n" });
+  writeSkill("kotlin-sdk");
   const tgz = path.join(tmpDataDir("ditto-e2e-tar-"), "fixture.tar.gz");
   await tar.c({ file: tgz, cwd: src }, [root]);
   rmrf(src);
@@ -50,9 +59,13 @@ describe("e2e: ditto skills (fixture tarball seam)", () => {
       expect(add.exitCode).toBe(0);
       expect(add.stdout).toContain("installed");
       expect(add.stdout).toContain("fixture");
-      expect(fs.existsSync(path.join(proj, ".claude", "skills", "dql", "SKILL.md"))).toBe(true);
+      expect(fs.existsSync(path.join(proj, ".claude", "skills", "write-dql", "SKILL.md"))).toBe(
+        true,
+      );
       expect(
-        fs.existsSync(path.join(proj, ".claude", "skills", "dql", "references", "indexing.md")),
+        fs.existsSync(
+          path.join(proj, ".claude", "skills", "write-dql", "references", "indexing.md"),
+        ),
       ).toBe(true);
 
       const list = (await cli(["skills", "list", "--project", proj], {
@@ -60,7 +73,7 @@ describe("e2e: ditto skills (fixture tarball seam)", () => {
         HOME: home,
       })) as unknown as RunResult;
       expect(list.exitCode).toBe(0);
-      expect(list.stdout).toContain("dql");
+      expect(list.stdout).toContain("write-dql");
       expect(list.stdout).toContain("fixture");
       expect(list.stdout).toContain("project");
     } finally {
@@ -109,6 +122,71 @@ describe("e2e: ditto skills (fixture tarball seam)", () => {
       )) as unknown as RunResult;
       expect(badProject.exitCode).toBe(2);
       expect(badProject.stderr).toContain("does not exist");
+    } finally {
+      rmrf(proj);
+      rmrf(home);
+      rmrf(path.dirname(tgz));
+    }
+  });
+
+  it("positional name installs that skill; --all installs every skill", async () => {
+    const tgz = await makeFixture();
+    const proj = tmpDataDir("ditto-e2e-proj-");
+    const home = tmpDataDir("ditto-e2e-home-");
+    try {
+      const one = (await cli(
+        ["skills", "add", "swift-sdk", "--agent", "claude", "--project", proj],
+        { DITTOSH_SKILLS_TARBALL: tgz, HOME: home },
+      )) as unknown as RunResult;
+      expect(one.exitCode).toBe(0);
+      expect(fs.existsSync(path.join(proj, ".claude", "skills", "swift-sdk", "SKILL.md"))).toBe(
+        true,
+      );
+      expect(fs.existsSync(path.join(proj, ".claude", "skills", "kotlin-sdk"))).toBe(false);
+
+      const all = (await cli(
+        ["skills", "add", "--all", "--agent", "claude", "--project", proj, "--force"],
+        { DITTOSH_SKILLS_TARBALL: tgz, HOME: home },
+      )) as unknown as RunResult;
+      expect(all.exitCode).toBe(0);
+      for (const name of ["write-dql", "swift-sdk", "kotlin-sdk"]) {
+        expect(fs.existsSync(path.join(proj, ".claude", "skills", name, "SKILL.md"))).toBe(true);
+      }
+
+      // update --all is then a no-op at the same ref
+      const upd = (await cli(["skills", "update", "--all", "--project", proj], {
+        DITTOSH_SKILLS_TARBALL: tgz,
+        HOME: home,
+      })) as unknown as RunResult;
+      expect(upd.exitCode).toBe(0);
+      expect(upd.stdout).toContain("already on fixture");
+    } finally {
+      rmrf(proj);
+      rmrf(home);
+      rmrf(path.dirname(tgz));
+    }
+  });
+
+  it("unknown skill exits 2 with the available list; versions reports no releases under the seam", async () => {
+    const tgz = await makeFixture();
+    const proj = tmpDataDir("ditto-e2e-proj-");
+    const home = tmpDataDir("ditto-e2e-home-");
+    try {
+      const bad = (await cli(["skills", "add", "nope", "--agent", "claude", "--project", proj], {
+        DITTOSH_SKILLS_TARBALL: tgz,
+        HOME: home,
+      })) as unknown as RunResult;
+      expect(bad.exitCode).toBe(2);
+      expect(bad.stderr).toContain("unknown skill 'nope'");
+      expect(bad.stderr).toContain("swift-sdk");
+      expect(bad.stdout).toBe("");
+
+      const versions = (await cli(["skills", "versions"], {
+        DITTOSH_SKILLS_TARBALL: tgz,
+        HOME: home,
+      })) as unknown as RunResult;
+      expect(versions.exitCode).toBe(0);
+      expect(versions.stderr).toContain("main");
     } finally {
       rmrf(proj);
       rmrf(home);

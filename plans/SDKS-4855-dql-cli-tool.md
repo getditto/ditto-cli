@@ -135,6 +135,14 @@ Modeled on Ditto Edge Studio (`ditto-vsc-es`) information architecture, rendered
 
 ### 9. AI skills install (`ditto skills`)
 
+> **Amendment (2026-11-03, `skills/release-assets`):** the upstream repo now ships
+> multiple skills (`write-dql`, `swift-sdk`, `kotlin-sdk`, …), so:
+> - commands take a positional name: `add [name]`, `update [name]` (`--skill` kept as a hidden deprecated alias)
+> - default skill is `write-dql` (the old `dql` skill was renamed upstream; `dql` remains a working alias and `update` migrates old `dql` installs)
+> - `--all` installs/updates every skill the archive ships (enumerated from the tarball at runtime — no hardcoded list)
+> - `--ref <tag>` pins a specific release (upgrade or downgrade); `skills versions` lists published releases
+> - fetch is **release-asset-first**: tagged releases serve the slim `ditto-skills.tar.gz` (skills/ only, built by the upstream Release workflow); `main`/untagged refs fall back to the codeload repo tarball
+
 Top-level group (skills are not DQL-specific long-term). Mirrors `android skills add` (`android/skills` repo semantics):
 
 ```
