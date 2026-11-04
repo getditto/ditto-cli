@@ -111,6 +111,7 @@ jobs:
           name: release-package
           path: build/release
       - name: Install and run offline DQL from the exact npm artifact
+        shell: bash
         run: node --import tsx scripts/release-smoke.ts npm "$RELEASE_TAG"
 
   homebrew-install:
