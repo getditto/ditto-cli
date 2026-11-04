@@ -3,6 +3,15 @@
   "version": "0.1.0",
   "description": "dittosh — the Ditto CLI: run DQL against a local Ditto store, load sample datasets, and install DQL skills for AI agents",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/getditto/ditto-cli.git"
+  },
+  "homepage": "https://github.com/getditto/ditto-cli#readme",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
   "type": "module",
   "bin": {
     "dittosh": "dist/cli.js"
@@ -25,6 +34,7 @@
   "scripts": {
     "dev": "tsx --env-file=.env src/cli/index.ts",
     "build": "tsup",
+    "release:check": "tsx scripts/release-check.ts",
     "typecheck": "tsc --noEmit",
     "lint": "biome check src tests scripts",
     "lint:fix": "biome check --write src tests scripts",
@@ -49,8 +59,10 @@
   "devDependencies": {
     "@biomejs/biome": "^2.5.11",
     "@types/node": "^26.4.0",
+    "@types/semver": "7.8.0",
     "@vitest/coverage-v8": "^4.1.11",
     "execa": "^10.0.1",
+    "semver": "7.8.6",
     "tsup": "^8.5.1",
     "tsx": "^4.23.12",
     "typescript": "^7.0.2",

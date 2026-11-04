@@ -53,6 +53,17 @@ scripts/install-release.sh # stamp token → RELEASE=true build → npm i -g . (
 - New user-facing command ⇒ e2e coverage. New logic ⇒ unit coverage. New SDK behavior ⇒ integration coverage.
 - **Coverage is a hard gate: ≥ 85%** statements/branches/functions/lines, enforced by `npm run coverage` (unit + integration projects, thresholds in `vitest.config.ts`) and in CI. `src/cli/index.ts` (process entry) is excluded deliberately — e2e covers it; v8 can't see subprocesses. Keep CLI glue thin: logic lives in injectable, unit-testable modules (see `doctor.ts`, `batch.ts`, `repl-core.ts`, `run.ts`).
 
+## Releases
+
+- `.github/workflows/release.yml` publishes existing `v*` tags to npm and GitHub,
+  then updates the Homebrew tap for stable releases. Branch merges do not publish.
+- Keep `package.json`, `package-lock.json`, and `releases/vX.Y.Z.md` in sync before
+  tagging. Release notes are required and become the GitHub release body.
+- `npm run release:check` verifies stamping, packaging, and installation with an
+  intentionally invalid fixture license; it does not publish or exercise DQL.
+- Follow `docs/publishing.md` for setup, platform checks, and partial-release
+  recovery. Never overwrite a published npm version or move a release tag.
+
 ## Known platform facts
 
 - SDK `@dittolive/ditto@5.1.0` native matrix: macOS arm64, Linux x64/arm64, Windows x64 (no darwin-x64).
