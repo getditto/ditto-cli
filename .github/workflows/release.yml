@@ -5,10 +5,6 @@ on:
     tags: ["v*"]
   workflow_dispatch:
     inputs:
-      tag:
-        description: "Existing release tag (vX.Y.Z or vX.Y.Z-rc.N)"
-        required: true
-        type: string
       dry-run:
         description: "Build and test without publishing"
         type: boolean
@@ -23,20 +19,19 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+  RELEASE_TAG: ${{ github.ref_name }}
   DITTOSH_NO_UPDATE_CHECK: "1"
 
 jobs:
   prepare:
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-24.04
     outputs:
       version: ${{ steps.validate.outputs.version }}
-      commit: ${{ steps.validate.outputs.commit }}
       prerelease: ${{ steps.validate.outputs.prerelease }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ inputs.tag || github.ref }}
           fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
@@ -44,14 +39,10 @@ jobs:
           node-version: "24"
       - run: npm ci
       - name: Verify the tag points to reviewed main history
-        env:
-          DRY_RUN: ${{ inputs.dry-run }}
         run: |
           test "$(git rev-parse "refs/tags/$RELEASE_TAG^{commit}")" = "$(git rev-parse HEAD)"
           git merge-base --is-ancestor HEAD origin/main
-          if [ "$DRY_RUN" != true ]; then
-            test "$GITHUB_REF" = "refs/tags/$RELEASE_TAG"
-          fi
+          test "$GITHUB_REF" = "refs/tags/$RELEASE_TAG"
       - name: Validate version and required release notes
         id: validate
         run: node --import tsx scripts/release.ts validate "$RELEASE_TAG"
@@ -86,7 +77,6 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ needs.prepare.outputs.commit }}
           persist-credentials: false
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
         with:
@@ -111,7 +101,6 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ needs.prepare.outputs.commit }}
           persist-credentials: false
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
         with:
@@ -134,7 +123,6 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ needs.prepare.outputs.commit }}
           persist-credentials: false
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
         with:
@@ -162,7 +150,6 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ needs.prepare.outputs.commit }}
           persist-credentials: false
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
         with:
@@ -191,7 +178,6 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ needs.prepare.outputs.commit }}
           persist-credentials: false
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
         with:

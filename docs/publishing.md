@@ -98,12 +98,13 @@ excluded because the current SDK has no darwin-x64 native binary.
 For a complete test without publishing, dispatch the workflow for an existing
 tag with `dry-run` enabled (the default). This still needs the real CLI license
 to verify DQL. For recovery, disable `dry-run`; use the exact original tag.
-The workflow itself must run from that tag, not from main, to satisfy the
-tag-only environment policy:
+Both dry runs and publishing runs must run from the selected tag. Every job
+checks out the triggering commit; there is no separate ref input. This also
+satisfies the tag-only environment policy:
 
 ```bash
 gh workflow run Release --repo getditto/ditto-cli --ref vX.Y.Z \
-  -f tag=vX.Y.Z -F dry-run=false
+  -F dry-run=false
 ```
 
 ## Verify the published release
