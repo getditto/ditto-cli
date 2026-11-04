@@ -42,12 +42,16 @@ jobs:
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
         with:
           node-version: "24"
-          cache: npm
       - run: npm ci
       - name: Verify the tag points to reviewed main history
+        env:
+          DRY_RUN: ${{ inputs.dry-run }}
         run: |
           test "$(git rev-parse "refs/tags/$RELEASE_TAG^{commit}")" = "$(git rev-parse HEAD)"
           git merge-base --is-ancestor HEAD origin/main
+          if [ "$DRY_RUN" != true ]; then
+            test "$GITHUB_REF" = "refs/tags/$RELEASE_TAG"
+          fi
       - name: Validate version and required release notes
         id: validate
         run: node --import tsx scripts/release.ts validate "$RELEASE_TAG"
@@ -87,7 +91,6 @@ jobs:
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
         with:
           node-version: "24"
-          cache: npm
       - run: npm ci
       - name: Integration coverage and end-to-end tests
         env:
@@ -113,7 +116,6 @@ jobs:
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
         with:
           node-version: "24"
-          cache: npm
       - run: npm ci
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
@@ -137,7 +139,6 @@ jobs:
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
         with:
           node-version: "24"
-          cache: npm
       - run: npm ci
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
@@ -166,7 +167,6 @@ jobs:
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
         with:
           node-version: "24"
-          cache: npm
       - run: npm ci
       - name: Use npm with trusted publishing support
         run: npm install --global npm@11.21.0
@@ -196,7 +196,6 @@ jobs:
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
         with:
           node-version: "24"
-          cache: npm
       - run: npm ci
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
