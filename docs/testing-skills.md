@@ -22,7 +22,7 @@ Prereqs:
   ```
 
 Known agents (for `--agent`): `claude`, `opencode`, `codex`, `gemini`,
-`cursor`, `copilot`, `windsurf`. Global installs go under the agent's home
+`antigravity`, `cursor`, `copilot`, `windsurf`. Global installs go under the agent's home
 dir (`~/.claude/skills`, `~/.agents/skills`, …); `cursor`/`copilot`/
 `windsurf` are project-only. Every install drops a `.dql-skill.json` marker
 next to the skill files — that's what `list`/`update` read.
@@ -174,6 +174,22 @@ next to the skill files — that's what `list`/`update` read.
   dittosh skills list --project /tmp/mt-skills   # ref column shows v0.1.0
   dittosh skills update --project /tmp/mt-skills # → latest, detail shows v0.1.0 → <latest>
   ```
+
+- [ ] **Antigravity: project-local install**
+  ```bash
+  dittosh skills add swift-sdk --project /tmp/mt-skills --agent antigravity
+  ```
+  Expect: `where` is `/tmp/mt-skills/.agents/skills/swift-sdk` (shared with the
+  opencode convention); row `agent: "antigravity"`, `status: "installed"`.
+
+- [ ] **Antigravity: global install** (optional — writes the real Antigravity skills dir)
+  ```bash
+  dittosh skills add swift-sdk --agent antigravity
+  ```
+  Expect: `where` is `~/.gemini/config/skills/swift-sdk` (the current global
+  dir; legacy `~/.gemini/antigravity/skills` is detection-only). Detection
+  triggers on `~/.gemini/antigravity` (IDE) or `~/.gemini/config`. Clean up by
+  removing `~/.gemini/config/skills/swift-sdk` afterwards if unwanted.
 
 ## 5. Global install (optional — writes real agent config dirs)
 

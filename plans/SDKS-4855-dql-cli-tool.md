@@ -146,7 +146,7 @@ Modeled on Ditto Edge Studio (`ditto-vsc-es`) information architecture, rendered
 Top-level group (skills are not DQL-specific long-term). Mirrors `android skills add` (`android/skills` repo semantics):
 
 ```
-ditto skills add [--skill dql | --all] [--agent claude,opencode,codex,gemini,cursor,copilot,windsurf] [--project <path>]
+ditto skills add [--skill dql | --all] [--agent claude,opencode,codex,gemini,antigravity,cursor,copilot,windsurf] [--project <path>]
 ditto skills update        # refresh installed skills from upstream
 ditto skills list          # show installed skills + versions per agent/location
 ```

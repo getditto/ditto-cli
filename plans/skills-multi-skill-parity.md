@@ -4,9 +4,10 @@
 > asset-first fetch + codeload fallback, `listReleases`, `listSkills`/
 > `extractSkills` (dual-layout), positional `[name]`, real `--all`, `--ref`
 > pinning, `skills versions`, default `write-dql`, `dql` alias + update-time
-> migration. Upstream release workflow: getditto/agent-skills PR #37.
-> **Remaining:** `skills export` (ZIPs for Claude Desktop), Antigravity agent
-> target (both deferred to a follow-up PR).
+> migration, **Antigravity agent target** (global `~/.gemini/config/skills`,
+> project `.agents/skills`, detection on `~/.gemini/antigravity` or
+> `~/.gemini/config`). Upstream release workflow: getditto/agent-skills PR #37.
+> **Remaining:** `skills export` (ZIPs for Claude Desktop) — follow-up PR.
 
 Goal: `dittosh skills` installs the Swift AI agent skill files (and the other Ditto
 skills) with the same option surface as the Android CLI (`android skills add|update`)

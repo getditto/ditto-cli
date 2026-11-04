@@ -194,6 +194,43 @@ describe("e2e: ditto skills (fixture tarball seam)", () => {
     }
   });
 
+  it("installs into antigravity's global dir (current + legacy detection)", async () => {
+    const tgz = await makeFixture();
+    const home = tmpDataDir("ditto-e2e-home-");
+    const proj = tmpDataDir("ditto-e2e-proj-");
+    try {
+      // Antigravity IDE present (legacy dir) → detected; explicit target.
+      fs.mkdirSync(path.join(home, ".gemini", "antigravity"), { recursive: true });
+      const add = (await cli(["skills", "add", "swift-sdk", "--agent", "antigravity"], {
+        DITTOSH_SKILLS_TARBALL: tgz,
+        HOME: home,
+      })) as unknown as RunResult;
+      expect(add.exitCode).toBe(0);
+      expect(
+        fs.existsSync(path.join(home, ".gemini", "config", "skills", "swift-sdk", "SKILL.md")),
+      ).toBe(true);
+
+      // Project scope uses the shared .agents/skills convention.
+      const proj2 = tmpDataDir("ditto-e2e-proj2-");
+      try {
+        const addProj = (await cli(
+          ["skills", "add", "swift-sdk", "--agent", "antigravity", "--project", proj2],
+          { DITTOSH_SKILLS_TARBALL: tgz, HOME: home },
+        )) as unknown as RunResult;
+        expect(addProj.exitCode).toBe(0);
+        expect(fs.existsSync(path.join(proj2, ".agents", "skills", "swift-sdk", "SKILL.md"))).toBe(
+          true,
+        );
+      } finally {
+        rmrf(proj2);
+      }
+    } finally {
+      rmrf(proj);
+      rmrf(home);
+      rmrf(path.dirname(tgz));
+    }
+  });
+
   it("private-repo guidance when the seam is absent and no token (real network path)", async () => {
     const home = tmpDataDir("ditto-e2e-home-");
     try {

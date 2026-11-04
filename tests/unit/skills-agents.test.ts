@@ -6,24 +6,36 @@ import { findInstalled, installSkill, MARKER, readMarker } from "../../src/skill
 import { rmrf, tmpDataDir } from "../helpers/credentials.js";
 
 describe("agent registry", () => {
-  it("has the seven spec'd agents", () => {
+  it("has the eight spec'd agents", () => {
     expect(AGENTS.map((a) => a.name)).toEqual([
       "claude",
       "opencode",
       "codex",
       "gemini",
+      "antigravity",
       "cursor",
       "copilot",
       "windsurf",
     ]);
   });
 
-  it("claude/opencode/codex/gemini have global + project dirs; cursor/copilot/windsurf are project-only", () => {
+  it("claude/opencode/codex/gemini/antigravity have global + project dirs; cursor/copilot/windsurf are project-only", () => {
     expect(getAgent("claude")!.globalDir).not.toBeNull();
+    expect(getAgent("antigravity")!.globalDir).not.toBeNull();
     expect(getAgent("cursor")!.globalDir).toBeNull();
     expect(getAgent("copilot")!.globalDir).toBeNull();
     expect(getAgent("windsurf")!.globalDir).toBeNull();
     expect(getAgent("nope")).toBeUndefined();
+  });
+
+  it("antigravity: global is ~/.gemini/config/skills, project is .agents/skills", () => {
+    const agy = getAgent("antigravity")!;
+    expect(targetDir(agy, "write-dql", { home: "/home/u" })).toBe(
+      path.join("/home/u", ".gemini", "config", "skills", "write-dql"),
+    );
+    expect(targetDir(agy, "write-dql", { project: "/repo" })).toBe(
+      path.join("/repo", ".agents", "skills", "write-dql"),
+    );
   });
 });
 
@@ -46,10 +58,26 @@ describe("detectAgents", () => {
     try {
       fs.mkdirSync(path.join(root, ".agents"), { recursive: true });
       const found = detectAgents({ home, project: root });
-      expect(found.map((a) => a.name)).toEqual(["opencode"]);
+      // .agents/ is the shared project convention: opencode + antigravity
+      expect(found.map((a) => a.name)).toEqual(["opencode", "antigravity"]);
     } finally {
       rmrf(home);
       rmrf(root);
+    }
+  });
+
+  it("detects antigravity by the legacy IDE dir and the current config dir", () => {
+    const home = tmpDataDir("ditto-home-");
+    const proj = tmpDataDir("ditto-proj-");
+    try {
+      fs.mkdirSync(path.join(home, ".gemini", "antigravity"), { recursive: true });
+      expect(detectAgents({ home, project: proj }).map((a) => a.name)).toContain("antigravity");
+      rmrf(path.join(home, ".gemini"));
+      fs.mkdirSync(path.join(home, ".gemini", "config"), { recursive: true });
+      expect(detectAgents({ home, project: proj }).map((a) => a.name)).toContain("antigravity");
+    } finally {
+      rmrf(home);
+      rmrf(proj);
     }
   });
 
