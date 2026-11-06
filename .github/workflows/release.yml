@@ -20,7 +20,6 @@ concurrency:
 
 env:
   RELEASE_TAG: ${{ github.ref_name }}
-  DITTOSH_NO_UPDATE_CHECK: "1"
 
 jobs:
   prepare:
