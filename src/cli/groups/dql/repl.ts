@@ -4,6 +4,7 @@ import { start } from "node:repl";
 import chalk from "chalk";
 import { configDir } from "../../../config/paths.js";
 import type { QueryExecutor } from "../../../ditto/session.js";
+import { METRICS_USAGE, makeMetricsCommand } from "./metrics.js";
 import { dotHelp, makeReplEval } from "./repl-core.js";
 import { type RunOptions, runStatement } from "./run.js";
 
@@ -56,6 +57,17 @@ export async function startRepl(
         params: name ? { collection: name.trim() } : undefined,
         suppressNoLimitWarning: true,
       });
+      if (!isClosed()) server.displayPrompt();
+    },
+  });
+
+  const metrics = makeMetricsCommand(session);
+  server.defineCommand("metrics", {
+    help: `Show store and query (DQL) system metrics: ${METRICS_USAGE}`,
+    async action(arg?: string) {
+      const { ok, text } = await metrics(arg);
+      if (ok) console.log(text);
+      else console.error(text);
       if (!isClosed()) server.displayPrompt();
     },
   });

@@ -85,13 +85,31 @@ tracing bootstrap on **stderr**; results still render normally.
 ## 5. Dot-commands
 
 - [ ] **`.help`** — lists the dot-commands:
-  `.collections`, `.indexes [name]`, `.break` / `.clear`, `.exit`.
+  `.collections`, `.indexes [name]`, `.metrics [section]`, `.break` /
+  `.clear`, `.exit`.
 
 - [ ] **`.collections`** — lists the `movies` collection (plus the
   `__feature_flags` system collection).
 
 - [ ] **`.indexes`** — lists all indexes (`[]`-style empty on a fresh
   store); **`.indexes movies`** scopes to one collection.
+
+- [ ] **`.metrics`** — after a few statements, prints `System metrics ·
+  Store, Query (DQL)` with a "first read this session" note, then boxed
+  tables: `Store · counters`, `Store · timings & distributions`, and the
+  same pair for `Query (DQL)`. Each table has a two-level header
+  (`since session opened` over Total/Count/Avg/Peak, `since last .metrics`
+  over Change/New/p50/p90/p99/Max); names are grouped under namespace rows
+  (`backend.sqlite3`, `query`) with labelled breakdowns as `└ db=main`.
+  Times read as `ns`/`µs`/`ms`/`s`, sizes as `B`/`KB`/`MB`.
+- [ ] **`.metrics` again** — no "first read" note; `query · requests`
+  Change is small (the previous `.metrics` read counts as one query).
+- [ ] **`.metrics query`** shows only the Query tables; **`.metrics all`**
+  adds every other section the SDK reports (e.g. Network, Transport);
+  **`.metrics bogus`** prints `unknown metrics section: bogus` plus usage
+  on stderr and the shell stays up.
+- [ ] **Narrow terminal** — resize to ~100 columns and run `.metrics`:
+  tables still fit, long names end in `…`.
 
 - [ ] **Unsupported node:repl commands are refused politely** — `.editor`,
   `.load`, `.save`. Expect: `not supported in the DQL REPL (use -f to run

@@ -18,7 +18,8 @@ The Ditto CLI: an npm/Homebrew-installable TypeScript CLI (binary `dittosh` — 
 - `src/cli/` — commander entry (`index.ts`), injected version (`version.ts`, tsup `define`), `groups/` per command group (`dql`, `skills`, `system`)
 - `src/config/` — data-dir resolution (`--data-dir` > `DITTOSH_DATA_DIR` > OS default), config dir (`DITTOSH_CONFIG_DIR` > OS default; env-paths caches homedir at module load, so tests must use this override, not `$HOME`), persisted state (one-time warnings, update cache)
 - `src/identity/` — token loading (dev env / release reassembly), expiry
-- `src/ditto/session.ts` — the only SDK touchpoint: init/open/close, log taming, lock mapping
+- `src/ditto/session.ts` — the only SDK touchpoint: init/open/close, log taming, lock mapping; enables the startup-gated `system:metrics` exporter (`systemParameters`)
+- `src/metrics/` — `system:metrics` row parsing and section grouping (REPL `.metrics`, rendered by `src/render/metrics.ts`)
 - `src/query/` — statement classifier, splitter, param binding, result extraction, row cap
 - `src/render/` — table (terminal-width fitting)/JSON/CSV/markdown/HTML/vertical, pager (`$PAGER`/`less`, `--no-pager`/`DITTOSH_NO_PAGER`), `-o/--out`, (M4: explain/profile/advise renderers)
 - `datasets/` — vendored benchmark suite definitions (movies, retail, retail-joins, pos); **no generated data ever committed**

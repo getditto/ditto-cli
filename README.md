@@ -208,7 +208,9 @@ dittosh dql --advise --apply -y "SELECT …"  # apply them
 
 ## REPL
 
-Bare `dittosh dql` starts an interactive session: multi-line statements terminated with `;`, history, per-statement timing, dot-commands (`.help`, `.collections`, `.indexes [name]`, `.break`, `.exit`).
+Bare `dittosh dql` starts an interactive session: multi-line statements terminated with `;`, history, per-statement timing, dot-commands (`.help`, `.collections`, `.indexes [name]`, `.metrics [section]`, `.break`, `.exit`).
+
+`.metrics` shows the SDK's live system metrics for the session as formatted tables — store (SQLite transactions, fsync, WAL size, commit/lock timings) and query/DQL (requests, selects, failures, parse/plan/execution time) by default. Totals run since the session opened; the Change, p50/p90/p99 and Max columns cover the time since the previous `.metrics`. `.metrics query` or `.metrics store` narrows the view; `.metrics all` adds network, sync, transport, and the other sections.
 
 ## Development
 

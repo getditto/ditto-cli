@@ -32,6 +32,8 @@ const DOT_HELP = `Available commands:
   .help                 show this help
   .collections          list collections (system:collections)
   .indexes [name]       list indexes (system:indexes), optionally for one collection
+  .metrics [section]    store + query (DQL) system metrics; sections: store, query,
+                        network, sync, transport, discovery, peer, other, or all
   .break / .clear       discard the current multi-line statement
   .exit                 quit (also: Ctrl-D, Ctrl-C)
 

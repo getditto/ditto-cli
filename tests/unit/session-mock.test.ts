@@ -9,6 +9,7 @@ const h = vi.hoisted(() => ({
   openCalls: 0,
   licenseCalls: 0,
   closeCalls: 0,
+  configArgs: [] as unknown[],
 }));
 
 vi.mock("@dittolive/ditto", () => {
@@ -20,7 +21,11 @@ vi.mock("@dittolive/ditto", () => {
     init: async () => {
       h.initCalls++;
     },
-    DittoConfig: class {},
+    DittoConfig: class {
+      constructor(...args: unknown[]) {
+        h.configArgs = args;
+      }
+    },
     Ditto: {
       open: async () => {
         h.openCalls++;
@@ -92,6 +97,24 @@ describe("DittoSession (mocked SDK)", () => {
       expect(h.openCalls).toBeGreaterThan(0);
       expect(h.licenseCalls).toBeGreaterThan(0);
       expect(h.closeCalls).toBe(1);
+    } finally {
+      rmrf(dir);
+    }
+  });
+
+  it("opens offline-only with the system:metrics exporter enabled (startup-gated)", async () => {
+    const dir = tmpDataDir("ditto-sess-");
+    try {
+      const session = await DittoSession.open(IDENTITY, dir);
+      expect(h.configArgs).toEqual([
+        {
+          databaseID: "app",
+          connect: { mode: "smallPeersOnly" },
+          persistenceDirectory: dir,
+          systemParameters: { metrics_exporter_virtual_collection_enabled: true },
+        },
+      ]);
+      await session.close();
     } finally {
       rmrf(dir);
     }
