@@ -1,8 +1,8 @@
 # Manual testing — `dittosh skills` (installing agent files)
 
-Checklist for the `dittosh skills` command group: `add`, `list`, and
-`update`. These commands fetch the DQL skill from the private
-`getditto/agent-skills` repo on GitHub and write it into AI coding agents'
+Checklist for the `dittosh skills` command group: `add`, `list`,
+`update`, and `versions`. These commands fetch skills from the private
+`getditto/agent-skills` repo on GitHub and write them into AI coding agents'
 config dirs.
 
 Every command is copy-pasteable. Run top to bottom; check off what passes.
@@ -22,7 +22,7 @@ Prereqs:
   ```
 
 Known agents (for `--agent`): `claude`, `opencode`, `codex`, `gemini`,
-`cursor`, `copilot`, `windsurf`. Global installs go under the agent's home
+`antigravity`, `cursor`, `copilot`, `windsurf`. Global installs go under the agent's home
 dir (`~/.claude/skills`, `~/.agents/skills`, …); `cursor`/`copilot`/
 `windsurf` are project-only. Every install drops a `.dql-skill.json` marker
 next to the skill files — that's what `list`/`update` read.
@@ -34,8 +34,8 @@ next to the skill files — that's what `list`/`update` read.
   dittosh skills add --project /tmp/mt-skills --agent claude,opencode
   ```
   Expect (piped → JSON): one row per agent with `status: "installed"`,
-  `ref: "main"`, and `where` pointing at `/tmp/mt-skills/.claude/skills/dql`
-  and `/tmp/mt-skills/.agents/skills/dql`. Progress
+  `ref: "main"`, and `where` pointing at `/tmp/mt-skills/.claude/skills/write-dql`
+  and `/tmp/mt-skills/.agents/skills/write-dql`. Progress
   (`Resolving…`/`Fetching…`) on **stderr**. Exit 0.
 
 - [ ] **Files actually landed**
@@ -131,15 +131,75 @@ next to the skill files — that's what `list`/`update` read.
   Expect: the claude row shows `status: "updated"` with detail
   `old-ref → main`; opencode (still current) is untouched.
 
-## 4. Global install (optional — writes real agent config dirs)
+## 4. Multi-skill, versions & pinning (new)
+
+- [ ] **Install a named skill positionally**
+  ```bash
+  dittosh skills add swift-sdk --project /tmp/mt-skills --agent claude
+  ```
+  Expect: row `skill: "swift-sdk"`, files at
+  `/tmp/mt-skills/.claude/skills/swift-sdk/`. Exit 0.
+
+- [ ] **Install everything**
+  ```bash
+  dittosh skills add --all --project /tmp/mt-skills --agent claude
+  ```
+  Expect: one row per upstream skill (write-dql, swift-sdk, kotlin-sdk, …),
+  all `installed`. One fetch (stderr shows a single `Fetching…`).
+
+- [ ] **Unknown skill lists what's available**
+  ```bash
+  dittosh skills add nope --project /tmp/mt-skills --agent claude
+  ```
+  Expect: exit 2, stderr `unknown skill 'nope' — available: …`, empty stdout.
+
+- [ ] **Old name still works (alias)**
+  ```bash
+  dittosh skills add dql --project /tmp/mt-skills --agent claude --force
+  ```
+  Expect: stderr note `skill 'dql' is now 'write-dql' upstream`, files land
+  under `skills/write-dql/`.
+
+- [ ] **List published releases**
+  ```bash
+  dittosh skills versions
+  ```
+  Expect: table of tags, newest first marked `latest`, with a
+  `slim_asset` column (`yes` once the Release workflow has run). Before any
+  release exists: `installs track the main branch`.
+
+- [ ] **Pin a version, then move off it**
+  ```bash
+  dittosh skills add write-dql --ref v0.1.0 --project /tmp/mt-skills --agent claude --force
+  dittosh skills list --project /tmp/mt-skills   # ref column shows v0.1.0
+  dittosh skills update --project /tmp/mt-skills # → latest, detail shows v0.1.0 → <latest>
+  ```
+
+- [ ] **Antigravity: project-local install**
+  ```bash
+  dittosh skills add swift-sdk --project /tmp/mt-skills --agent antigravity
+  ```
+  Expect: `where` is `/tmp/mt-skills/.agents/skills/swift-sdk` (shared with the
+  opencode convention); row `agent: "antigravity"`, `status: "installed"`.
+
+- [ ] **Antigravity: global install** (optional — writes the real Antigravity skills dir)
+  ```bash
+  dittosh skills add swift-sdk --agent antigravity
+  ```
+  Expect: `where` is `~/.gemini/config/skills/swift-sdk` (the current global
+  dir; legacy `~/.gemini/antigravity/skills` is detection-only). Detection
+  triggers on `~/.gemini/antigravity` (IDE) or `~/.gemini/config`. Clean up by
+  removing `~/.gemini/config/skills/swift-sdk` afterwards if unwanted.
+
+## 5. Global install (optional — writes real agent config dirs)
 
 - [ ] **Install globally for one agent**
   ```bash
   dittosh skills add --agent claude
   ```
-  Expect: `where` is `~/.claude/skills/dql`; `dittosh skills list` now shows
+  Expect: `where` is `~/.claude/skills/write-dql`; `dittosh skills list` now shows
   a `global` row for it. Re-run without `--force` → `skipped`. Clean up by
-  removing `~/.claude/skills/dql` afterwards if you don't want to keep it.
+  removing `~/.claude/skills/write-dql` afterwards if you don't want to keep it.
 
 - [ ] **Default agent selection** (optional)
   ```bash
@@ -149,7 +209,7 @@ next to the skill files — that's what `list`/`update` read.
   exists). With none detectable: `No agents detected — pass --agent
   explicitly…`, exit 2.
 
-## 5. Cleanup
+## 6. Cleanup
 
 - [ ] **Remove the scratch dirs**
   ```bash

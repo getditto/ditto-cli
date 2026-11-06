@@ -150,17 +150,26 @@ dittosh dql dataset reset retail --yes            # evict the dataset's collecti
 
 `--no-color`, `--quiet` (suppress informational notes), `--no-update-check` (planned; update flow lands in a later milestone).
 
-### `dittosh skills` — install the DQL agent skill for AI coding agents
+### `dittosh skills` — install Ditto agent skills for AI coding agents
 
 ```bash
-dittosh skills add                    # install the dql skill into all detected agents (global)
+dittosh skills add                    # install the default skill (write-dql) into all detected agents
+dittosh skills add swift-sdk          # install a named skill
+dittosh skills add --all              # install every skill the upstream repo ships
 dittosh skills add --project .        # project-local install
 dittosh skills add --agent claude,opencode   # specific agents
+dittosh skills add --ref v0.1.0       # pin a specific release
 dittosh skills list                   # what's installed where (with upstream ref)
-dittosh skills update                 # refresh installed skills from the latest upstream release
+dittosh skills update                 # refresh write-dql installs to the latest release
+dittosh skills update --all           # refresh every installed skill (shows current → latest)
+dittosh skills versions               # list published releases (newest = latest)
 ```
 
-Mirrors the Android CLI's `android skills add` semantics: default skill is `dql`, global scope unless `--project <path>`, all detected agents unless `--agent <list>`. Targets: Claude Code (`~/.claude/skills/dql` or `.claude/skills/dql`), OpenCode (`~/.agents/skills/dql` or `.agents/skills/dql`), Codex (`~/.codex/skills/dql`), Gemini (`~/.gemini/skills/dql`), Cursor (`.cursor/rules/dql`, project-only), Copilot + Windsurf (project instruction files). While `getditto/agent-skills` is private, set `GITHUB_TOKEN` (e.g. `GITHUB_TOKEN=$(gh auth token)`).
+Skills come from the upstream [`getditto/agent-skills`](https://github.com/getditto/agent-skills) repo (`write-dql`, `swift-sdk`, `kotlin-sdk`, `data-modeling`, `data-streams`, `ditto-mesh-networking`, `sync-subscriptions`, …). Tagged releases serve a slim skills-only archive; until a release exists, installs track the `main` branch snapshot. The set of skills is read from the archive at runtime, so new upstream skills work with no CLI update.
+
+Semantics: `add` never upgrades an existing install (it skips; `--force` overwrites) — `update` is the version-moving command and skips the download entirely when everything is current. `update` refreshes all installs of a skill across agents (no `--agent` filter); use `--project` to scope to project-local installs. The old `dql` skill name still works as an alias for `write-dql`, and `update` migrates `dql`-era installs to the new name.
+
+Agent targets: Claude Code (`~/.claude/skills` or `.claude/skills`), OpenCode (`~/.agents/skills` or `.agents/skills`), Codex (`~/.codex/skills`), Gemini (`~/.gemini/skills`), Antigravity (`~/.gemini/config/skills` or `.agents/skills`), Cursor (`.cursor/rules`, project-only), Copilot + Windsurf (project instruction files). While `getditto/agent-skills` is private, set `GITHUB_TOKEN` (e.g. `GITHUB_TOKEN=$(gh auth token)`).
 
 ### Planned for later milestones
 
