@@ -84,7 +84,7 @@ dittosh dql                                            # interactive REPL
 | `--continue-on-error` | keep running after a failure (batch mode) |
 | `--time` | timing footer (host wall-clock + server parse/plan/elapsed when profiling) |
 | `--explain` | print the query plan (EXPLAIN side-trip, SELECTs only) |
-| `--profile` | print the execution profile with per-operator timings and hotspot flags (SELECTs only) |
+| `--profile` | print the execution profile with per-operator timings (exec/recv/send/stor), document counts, scheduler yields, join subplans, and hotspot flags (SELECTs only) |
 | `--advise` | print index advice (ADVISE, SELECTs only) |
 | `--apply` | apply ADVISE's suggested `CREATE INDEX` statements (prompts; `-y` skips) |
 | `-y, --yes` | skip confirmation prompts |

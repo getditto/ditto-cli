@@ -1,15 +1,25 @@
 import { stripControlChars } from "../render/sanitize.js";
 import type { PlanNode } from "./parse.js";
 
-/** Sum of exec time over a node's subtree (ns). */
+/** A node's nested plans in render order: children, then labeled subplans. */
+function nested(node: PlanNode): { plan: PlanNode; label?: string }[] {
+  return [
+    ...node.children.map((plan) => ({ plan })),
+    ...(node.subplans ?? []).map(({ key, plan }) => ({ plan, label: key })),
+  ];
+}
+
+/** Sum of exec time over a node's subtree, including subplans (ns). */
 export function subtreeExecNs(node: PlanNode): number {
   const own = node.stats?.phaseTimes?.exec ?? 0;
-  return own + node.children.reduce((s, c) => s + subtreeExecNs(c), 0);
+  return own + nested(node).reduce((s, c) => s + subtreeExecNs(c.plan), 0);
 }
 
 export interface AnnotatedNode {
   node: PlanNode;
   depth: number;
+  /** Subplan key when this node roots a subplan (e.g. `inner` under `nlJoin`). */
+  label?: string;
   execNs: number;
   /** exec as a fraction of the whole plan's subtree exec (0–1). */
   fraction: number;
@@ -23,17 +33,18 @@ export const HOTSPOT_THRESHOLD = 0.5;
 export function annotatePlan(root: PlanNode): AnnotatedNode[] {
   const total = subtreeExecNs(root);
   const out: AnnotatedNode[] = [];
-  const walk = (node: PlanNode, depth: number) => {
+  const walk = (node: PlanNode, depth: number, label?: string) => {
     const execNs = node.stats?.phaseTimes?.exec ?? 0;
     const fraction = total > 0 ? execNs / total : 0;
     out.push({
       node,
       depth,
+      ...(label ? { label } : {}),
       execNs,
       fraction,
       isHotspot: fraction >= HOTSPOT_THRESHOLD && execNs > 0,
     });
-    for (const child of node.children) walk(child, depth + 1);
+    for (const c of nested(node)) walk(c.plan, depth + 1, c.label);
   };
   walk(root, 0);
   return out;

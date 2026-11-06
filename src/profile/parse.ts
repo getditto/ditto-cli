@@ -2,7 +2,9 @@
  * Parser for the `~request_profile` envelope the Ditto SDK appends to result
  * sets of `PROFILE <SELECT>` statements. Tolerant by design — the envelope
  * shape is not a stable upstream contract (see spec risks). Field names
- * verified against SDK 5.1.0 (Spike C) and Edge Studio's parser.
+ * verified against SDK 5.1.0 (Spike C), re-verified on SDK 5.2.0 (which adds
+ * `stor` phase time, `yields` counters, `documentsSkipped`, and `nlJoin.inner`
+ * subplans), and kept in parity with the Ditto VS Code extension's parser.
  */
 
 export interface ProfileTimes {
@@ -12,16 +14,39 @@ export interface ProfileTimes {
   startIso?: string;
 }
 
+export interface PhaseTimes {
+  /** CPU time inside the operator. */
+  exec?: number;
+  /** Time waiting on upstream operators to feed input. */
+  recv?: number;
+  /** Time pushing output to downstream operators. */
+  send?: number;
+  /** Time blocked on the store backend (SDK 5.1+). */
+  stor?: number;
+}
+
+export interface PlanStats {
+  documentsIn?: number;
+  documentsOut?: number;
+  /** Documents skipped without being emitted (SDK 5.1+). */
+  documentsSkipped?: number;
+  phaseTimes?: PhaseTimes;
+  /**
+   * Cooperative-scheduler yield counts keyed by reason (`budget`, `sender`,
+   * `receiver`, `heartbeat`; SDK 5.1+). Zero counts are dropped; absent when
+   * nothing yielded. Unknown future reasons pass through.
+   */
+  yields?: Record<string, number>;
+}
+
 export interface PlanNode {
   name: string;
-  stats?: {
-    documentsIn?: number;
-    documentsOut?: number;
-    phaseTimes?: { exec?: number; recv?: number; send?: number };
-  };
-  /** Operator-specific attributes, insertion-ordered (skip #operator/#stats/children). */
+  stats?: PlanStats;
+  /** Operator-specific attributes, insertion-ordered (skip #operator/#stats/children/subplans). */
   attributes: [string, unknown][];
   children: PlanNode[];
+  /** Labeled nested plans carried in non-`children` fields, e.g. `nlJoin.inner` (SDK 5.1+). */
+  subplans?: { key: string; plan: PlanNode }[];
 }
 
 export interface QueryProfile {
@@ -33,6 +58,8 @@ export interface QueryProfile {
   state?: string;
   text?: string;
   featureFlags?: string;
+  /** Request directives, e.g. `{ "#profile": true }`. */
+  directives?: Record<string, unknown>;
   times: ProfileTimes;
   plan?: PlanNode;
 }
@@ -94,6 +121,7 @@ function parseEnvelope(env: Record<string, unknown>): QueryProfile {
     state: typeof env.state === "string" ? env.state : undefined,
     text: typeof env.text === "string" ? env.text : undefined,
     featureFlags: typeof env.featureFlags === "string" ? env.featureFlags : undefined,
+    directives: isRecord(env.directives) ? env.directives : undefined,
     times: {
       elapsedNs: ns(times.elapsed),
       parseNs: ns(times.parse),
@@ -107,35 +135,60 @@ function parseEnvelope(env: Record<string, unknown>): QueryProfile {
   };
 }
 
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+function isPlanNode(v: unknown): v is Record<string, unknown> {
+  return isRecord(v) && typeof v["#operator"] === "string";
+}
+
+/** Non-zero numeric yield counters, or undefined when none fired. */
+function parseYields(raw: unknown): Record<string, number> | undefined {
+  if (!isRecord(raw)) return undefined;
+  const out: Record<string, number> = {};
+  for (const [k, v] of Object.entries(raw)) {
+    const n = ns(v);
+    if (n !== undefined && n !== 0) out[k] = n;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+function parseStats(raw: unknown): PlanStats | undefined {
+  if (!isRecord(raw) || Object.keys(raw).length === 0) return undefined;
+  const phase = isRecord(raw.phaseTimes) ? raw.phaseTimes : undefined;
+  return {
+    documentsIn: ns(raw.documentsIn),
+    documentsOut: ns(raw.documentsOut),
+    documentsSkipped: ns(raw.documentsSkipped),
+    phaseTimes:
+      phase && Object.keys(phase).length > 0
+        ? { exec: ns(phase.exec), recv: ns(phase.recv), send: ns(phase.send), stor: ns(phase.stor) }
+        : undefined,
+    yields: parseYields(raw.yields),
+  };
+}
+
+const RESERVED = new Set(["#operator", "#stats", "children"]);
+
 function parsePlanNode(node: Record<string, unknown>): PlanNode {
-  const statsRaw = (node["#stats"] ?? {}) as Record<string, unknown>;
-  const phaseRaw = (statsRaw.phaseTimes ?? {}) as Record<string, unknown>;
   const children = Array.isArray(node.children)
-    ? (node.children as unknown[])
-        .filter((c): c is Record<string, unknown> => typeof c === "object" && c !== null)
-        .map((c) => parsePlanNode(c))
+    ? (node.children as unknown[]).filter(isRecord).map((c) => parsePlanNode(c))
     : [];
 
-  const stats =
-    Object.keys(statsRaw).length === 0
-      ? undefined
-      : {
-          documentsIn: ns(statsRaw.documentsIn),
-          documentsOut: ns(statsRaw.documentsOut),
-          phaseTimes:
-            Object.keys(phaseRaw).length === 0
-              ? undefined
-              : { exec: ns(phaseRaw.exec), recv: ns(phaseRaw.recv), send: ns(phaseRaw.send) },
-        };
-
-  const attributes: [string, unknown][] = Object.entries(node)
-    .filter(([k]) => k !== "#operator" && k !== "#stats" && k !== "children")
-    .map(([k, v]) => [k, v]);
+  const attributes: [string, unknown][] = [];
+  const subplans: { key: string; plan: PlanNode }[] = [];
+  for (const [k, v] of Object.entries(node)) {
+    if (RESERVED.has(k)) continue;
+    if (isPlanNode(v)) subplans.push({ key: k, plan: parsePlanNode(v) });
+    else attributes.push([k, v]);
+  }
 
   return {
     name: typeof node["#operator"] === "string" ? node["#operator"] : "unknown",
-    stats,
+    stats: parseStats(node["#stats"]),
     attributes,
     children,
+    ...(subplans.length > 0 ? { subplans } : {}),
   };
 }

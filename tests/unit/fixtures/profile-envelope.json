@@ -1,14 +1,14 @@
 {
-  "capturedAt": "2026-08-30T00:13:30.899Z",
-  "sdkVersion": "5.1.0",
+  "capturedAt": "2026-11-06T16:40:11.929Z",
+  "sdkVersion": "5.2.0",
   "profiles": [
     {
       "query": "PROFILE SELECT * FROM movies WHERE rated = 'PG'",
-      "itemCount": 51,
+      "itemCount": 501,
       "envelope": {
         "~request_profile": {
-          "_id": "494464d7-68ca-4cf4-adf3-43a4daeef076",
-          "database_id": "eeb08fe8-e140-4b5f-83ef-784907a507dc",
+          "_id": "44cfe867-9735-4940-84c5-8828506a26c1",
+          "database_id": "bd701078-953b-4b01-b35e-1b0346a748a2",
           "directives": {
             "#profile": true
           },
@@ -19,92 +19,14 @@
               {
                 "#operator": "scan",
                 "#stats": {
-                  "documentsOut": 200,
+                  "documentsOut": 2000,
                   "phaseTimes": {
-                    "exec": 27973,
-                    "recv": 220293,
-                    "send": 245004
+                    "exec": 210768,
+                    "recv": 200579,
+                    "send": 1337157
                   },
                   "yields": {
-                    "budget": 3,
-                    "receiver": 1
-                  }
-                },
-                "alias": "movies",
-                "collection": "movies",
-                "datasource": "default",
-                "descriptor": {
-                  "diff_scan_condition": "never"
-                }
-              },
-              {
-                "#operator": "filter",
-                "#stats": {
-                  "documentsIn": 200,
-                  "documentsOut": 50,
-                  "phaseTimes": {
-                    "exec": 126843,
-                    "send": 15077
-                  }
-                },
-                "condition": "(`movies`.`rated` = \"PG\")"
-              },
-              {
-                "#operator": "finalProjection",
-                "#stats": {
-                  "documentsIn": 50,
-                  "documentsOut": 50,
-                  "phaseTimes": {
-                    "exec": 2245,
-                    "recv": 497996,
-                    "send": 11006
-                  },
-                  "yields": {
-                    "receiver": 32
-                  }
-                }
-              }
-            ]
-          },
-          "queryType": "select",
-          "requestType": "SDK",
-          "resultCount": 50,
-          "state": "completed",
-          "text": "PROFILE SELECT * FROM movies WHERE rated = 'PG'",
-          "times": {
-            "elapsed": 3122137,
-            "parse": 1542862,
-            "plan": 452645,
-            "start": "2026-08-29T19:13:30.849-05:00"
-          }
-        }
-      }
-    },
-    {
-      "query": "PROFILE SELECT * FROM movies WHERE year > '2000' AND rated = 'R' ORDER BY year DESC LIMIT 10",
-      "itemCount": 11,
-      "envelope": {
-        "~request_profile": {
-          "_id": "0f03dec7-918a-40ed-a8d9-d72e334fd770",
-          "database_id": "eeb08fe8-e140-4b5f-83ef-784907a507dc",
-          "directives": {
-            "#profile": true
-          },
-          "featureFlags": "0x83a",
-          "plan": {
-            "#operator": "sequence",
-            "children": [
-              {
-                "#operator": "scan",
-                "#stats": {
-                  "documentsOut": 200,
-                  "phaseTimes": {
-                    "exec": 18021,
-                    "recv": 317389,
-                    "send": 170150
-                  },
-                  "yields": {
-                    "budget": 3,
+                    "budget": 31,
                     "receiver": 2
                   }
                 },
@@ -118,11 +40,89 @@
               {
                 "#operator": "filter",
                 "#stats": {
-                  "documentsIn": 200,
-                  "documentsOut": 12,
+                  "documentsIn": 2000,
+                  "documentsOut": 500,
                   "phaseTimes": {
-                    "exec": 140110,
-                    "send": 11833
+                    "exec": 791852,
+                    "send": 176993
+                  }
+                },
+                "condition": "(`movies`.`rated` = \"PG\")"
+              },
+              {
+                "#operator": "finalProjection",
+                "#stats": {
+                  "documentsIn": 500,
+                  "documentsOut": 500,
+                  "phaseTimes": {
+                    "exec": 18718,
+                    "recv": 1726864,
+                    "send": 91837
+                  },
+                  "yields": {
+                    "receiver": 269
+                  }
+                }
+              }
+            ]
+          },
+          "queryType": "select",
+          "requestType": "SDK",
+          "resultCount": 500,
+          "state": "completed",
+          "text": "PROFILE SELECT * FROM movies WHERE rated = 'PG'",
+          "times": {
+            "elapsed": 2094461,
+            "parse": 36059,
+            "plan": 45018,
+            "start": "2026-11-06T10:40:11.889-06:00"
+          }
+        }
+      }
+    },
+    {
+      "query": "PROFILE SELECT * FROM movies WHERE year > '2000' AND rated = 'R' ORDER BY year DESC LIMIT 10",
+      "itemCount": 11,
+      "envelope": {
+        "~request_profile": {
+          "_id": "32ae1a16-ed37-4e7e-ad3b-e20ca049c7e6",
+          "database_id": "bd701078-953b-4b01-b35e-1b0346a748a2",
+          "directives": {
+            "#profile": true
+          },
+          "featureFlags": "0x83a",
+          "plan": {
+            "#operator": "sequence",
+            "children": [
+              {
+                "#operator": "scan",
+                "#stats": {
+                  "documentsOut": 2000,
+                  "phaseTimes": {
+                    "exec": 138639,
+                    "recv": 187788,
+                    "send": 1512285
+                  },
+                  "yields": {
+                    "budget": 31,
+                    "receiver": 2
+                  }
+                },
+                "alias": "movies",
+                "collection": "movies",
+                "datasource": "default",
+                "descriptor": {
+                  "diff_scan_condition": "never"
+                }
+              },
+              {
+                "#operator": "filter",
+                "#stats": {
+                  "documentsIn": 2000,
+                  "documentsOut": 156,
+                  "phaseTimes": {
+                    "exec": 1060739,
+                    "send": 73463
                   }
                 },
                 "condition": "((`movies`.`year` > \"2000\") AND (`movies`.`rated` = \"R\"))"
@@ -130,15 +130,15 @@
               {
                 "#operator": "sort",
                 "#stats": {
-                  "documentsIn": 12,
+                  "documentsIn": 156,
                   "documentsOut": 10,
                   "phaseTimes": {
-                    "exec": 82493,
-                    "recv": 423770,
-                    "send": 1791
+                    "exec": 195890,
+                    "recv": 1698197,
+                    "send": 2124
                   },
                   "yields": {
-                    "receiver": 5
+                    "receiver": 87
                   }
                 },
                 "limit": 10,
@@ -155,9 +155,9 @@
                   "documentsIn": 10,
                   "documentsOut": 10,
                   "phaseTimes": {
-                    "exec": 585,
-                    "recv": 533701,
-                    "send": 747
+                    "exec": 334,
+                    "recv": 1921663,
+                    "send": 542
                   },
                   "yields": {
                     "receiver": 1
@@ -172,10 +172,192 @@
           "state": "completed",
           "text": "PROFILE SELECT * FROM movies WHERE year > '2000' AND rated = 'R' ORDER BY year DESC LIMIT 10",
           "times": {
-            "elapsed": 1153271,
-            "parse": 56620,
-            "plan": 413836,
-            "start": "2026-08-29T19:13:30.854-05:00"
+            "elapsed": 2072919,
+            "parse": 30975,
+            "plan": 45018,
+            "start": "2026-11-06T10:40:11.895-06:00"
+          }
+        }
+      }
+    },
+    {
+      "query": "PROFILE SELECT m._id, y.label FROM movies m JOIN years y ON m.year = y.year WHERE m.rated = 'G' LIMIT 50",
+      "itemCount": 51,
+      "envelope": {
+        "~request_profile": {
+          "_id": "8572f531-6374-43ca-a8fa-0601f87f5899",
+          "database_id": "bd701078-953b-4b01-b35e-1b0346a748a2",
+          "directives": {
+            "#profile": true
+          },
+          "featureFlags": "0x83a",
+          "plan": {
+            "#operator": "sequence",
+            "children": [
+              {
+                "#operator": "scan",
+                "#stats": {
+                  "documentsOut": 1228,
+                  "phaseTimes": {
+                    "exec": 94639,
+                    "recv": 259329,
+                    "send": 2080333
+                  },
+                  "yields": {
+                    "budget": 19,
+                    "receiver": 9
+                  }
+                },
+                "alias": "m",
+                "collection": "movies",
+                "datasource": "default",
+                "descriptor": {
+                  "diff_scan_condition": "never"
+                }
+              },
+              {
+                "#operator": "filter",
+                "#stats": {
+                  "documentsIn": 1229,
+                  "documentsOut": 307,
+                  "phaseTimes": {
+                    "exec": 496452,
+                    "send": 1368817
+                  }
+                },
+                "condition": "(`m`.`rated` = \"G\")"
+              },
+              {
+                "#operator": "nlJoin",
+                "#stats": {
+                  "documentsIn": 51,
+                  "documentsOut": 50,
+                  "phaseTimes": {
+                    "exec": 57555,
+                    "recv": 2424685,
+                    "send": 56536
+                  },
+                  "yields": {
+                    "receiver": 52
+                  }
+                },
+                "condition": "(`m`.`year` = `y`.`year`)",
+                "inner": {
+                  "#operator": "sequence",
+                  "children": [
+                    {
+                      "#operator": "indexScan",
+                      "#stats": {
+                        "documentsIn": 51,
+                        "documentsOut": 51,
+                        "phaseTimes": {
+                          "exec": 376623,
+                          "recv": 2081209,
+                          "send": 31975
+                        },
+                        "yields": {
+                          "receiver": 1
+                        }
+                      },
+                      "alias": "y",
+                      "collection": "years",
+                      "datasource": "default",
+                      "desc": {
+                        "index": "years_year",
+                        "spans": [
+                          [
+                            {
+                              "index_key": {
+                                "direction": "asc",
+                                "include_missing": true,
+                                "key": ["year"]
+                              },
+                              "range": {
+                                "high": {
+                                  "expr": "`m`.`year`",
+                                  "included": true
+                                },
+                                "low": {
+                                  "expr": "`m`.`year`",
+                                  "included": true
+                                }
+                              }
+                            }
+                          ]
+                        ]
+                      }
+                    },
+                    {
+                      "#operator": "fetch",
+                      "#stats": {
+                        "documentsIn": 51,
+                        "documentsOut": 51,
+                        "phaseTimes": {
+                          "exec": 65431,
+                          "recv": 1702885,
+                          "send": 50519,
+                          "stor": 716356
+                        },
+                        "yields": {
+                          "receiver": 53
+                        }
+                      },
+                      "alias": "y",
+                      "collection": "years",
+                      "datasource": "default"
+                    }
+                  ]
+                }
+              },
+              {
+                "#operator": "limit",
+                "#stats": {
+                  "documentsIn": 51,
+                  "documentsOut": 50,
+                  "phaseTimes": {
+                    "exec": 1665,
+                    "send": 27854
+                  }
+                },
+                "limit": 50
+              },
+              {
+                "#operator": "projection",
+                "#stats": {
+                  "documentsIn": 50,
+                  "documentsOut": 50,
+                  "phaseTimes": {
+                    "exec": 94949,
+                    "recv": 2391204,
+                    "send": 44978
+                  },
+                  "yields": {
+                    "receiver": 51
+                  }
+                },
+                "projections": [
+                  {
+                    "alias": "_id",
+                    "expression": "`m`.`_id`"
+                  },
+                  {
+                    "alias": "label",
+                    "expression": "`y`.`label`"
+                  }
+                ]
+              }
+            ]
+          },
+          "queryType": "select",
+          "requestType": "SDK",
+          "resultCount": 50,
+          "state": "completed",
+          "text": "PROFILE SELECT m._id, y.label FROM movies m JOIN years y ON m.year = y.year WHERE m.rated = 'G' LIMIT 50",
+          "times": {
+            "elapsed": 2744770,
+            "parse": 26934,
+            "plan": 87346,
+            "start": "2026-11-06T10:40:11.899-06:00"
           }
         }
       }

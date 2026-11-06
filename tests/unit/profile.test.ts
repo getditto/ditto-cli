@@ -11,7 +11,8 @@ import {
 import { extractProfile, type PlanNode, parseProfileItem } from "../../src/profile/parse.js";
 import { renderProfile } from "../../src/render/profile.js";
 
-// Real envelope captured from SDK 5.1.0 (scripts/spike-c.mjs). `envelope` is
+// Real envelopes captured from SDK 5.2.0 (scripts/spike-c.mjs): [0] filtered
+// SELECT, [1] sorted SELECT, [2] JOIN with an `nlJoin.inner` subplan. `envelope` is
 // the result-row object: `{ "~request_profile": { … } }`.
 const fixture = JSON.parse(
   fs.readFileSync(path.join(import.meta.dirname, "fixtures", "profile-envelope.json"), "utf8"),
@@ -22,8 +23,9 @@ const fixture = JSON.parse(
 
 const wrappedRow = fixture.profiles[0]!.envelope!;
 const bareEnvelope = wrappedRow["~request_profile"] as Record<string, unknown>;
+const joinRow = fixture.profiles[2]!.envelope!;
 
-describe("parseProfileItem (real SDK 5.1.0 envelope)", () => {
+describe("parseProfileItem (real SDK 5.2.0 envelope)", () => {
   it("parses the wrapped form", () => {
     const p = parseProfileItem(wrappedRow)!;
     expect(p.id).toBeTruthy();
@@ -75,6 +77,58 @@ describe("parseProfileItem (real SDK 5.1.0 envelope)", () => {
     // reserved keys never leak into attributes
     expect(scan.attributes.map(([k]) => k)).not.toContain("#stats");
     expect(scan.attributes.map(([k]) => k)).not.toContain("children");
+  });
+});
+
+describe("parseProfileItem (SDK 5.1+ stats: stor, yields, skipped, subplans)", () => {
+  const withStats = (stats: Record<string, unknown>, extra: Record<string, unknown> = {}) =>
+    parseProfileItem({
+      "~request_profile": {
+        times: { elapsed: 1 },
+        state: "completed",
+        plan: { "#operator": "fetch", "#stats": stats, ...extra },
+      },
+    })!.plan!;
+
+  it("parses stor phase time and documentsSkipped", () => {
+    const node = withStats({ documentsSkipped: 3, phaseTimes: { exec: 1, stor: 42 } });
+    expect(node.stats?.phaseTimes?.stor).toBe(42);
+    expect(node.stats?.documentsSkipped).toBe(3);
+  });
+
+  it("keeps non-zero yield counters (including unknown reasons) and drops zeros", () => {
+    const node = withStats({ yields: { budget: 61, sender: 0, receiver: 1, future: 2, bad: "x" } });
+    expect(node.stats?.yields).toEqual({ budget: 61, receiver: 1, future: 2 });
+  });
+
+  it("leaves yields undefined when every counter is zero or missing", () => {
+    expect(withStats({ yields: { budget: 0 } }).stats?.yields).toBeUndefined();
+    expect(withStats({ yields: null }).stats?.yields).toBeUndefined();
+    expect(withStats({ documentsOut: 1 }).stats?.yields).toBeUndefined();
+  });
+
+  it("treats object-valued fields with #operator as labeled subplans, not attributes", () => {
+    const node = withStats({}, { inner: { "#operator": "scan" }, desc: { index: "i" } });
+    expect(node.subplans).toEqual([
+      { key: "inner", plan: expect.objectContaining({ name: "scan" }) },
+    ]);
+    expect(node.attributes.map(([k]) => k)).toEqual(["desc"]);
+  });
+
+  it("parses envelope directives", () => {
+    expect(parseProfileItem(wrappedRow)!.directives).toEqual({ "#profile": true });
+  });
+
+  it("parses the real nlJoin.inner subplan with stor + yields from SDK 5.2.0", () => {
+    const p = parseProfileItem(joinRow)!;
+    const join = p.plan!.children.find((c) => c.name === "nlJoin")!;
+    expect(join.subplans?.[0]?.key).toBe("inner");
+    expect(join.attributes.map(([k]) => k)).not.toContain("inner");
+    const inner = join.subplans![0]!.plan;
+    const fetch = inner.children.find((c) => c.name === "fetch")!;
+    expect(fetch.stats?.phaseTimes?.stor).toBeGreaterThan(0);
+    const yielded = annotatePlan(p.plan!).filter((n) => n.node.stats?.yields);
+    expect(yielded.length).toBeGreaterThan(0);
   });
 });
 
@@ -150,6 +204,28 @@ describe("hotspots", () => {
     expect(HOTSPOT_THRESHOLD).toBe(0.5);
   });
 
+  it("includes subplans in subtree exec and labels them in the walk", () => {
+    const join: PlanNode = {
+      name: "nlJoin",
+      attributes: [],
+      stats: { phaseTimes: { exec: 10 } },
+      children: [],
+      subplans: [
+        {
+          key: "inner",
+          plan: { name: "scan", attributes: [], stats: { phaseTimes: { exec: 90 } }, children: [] },
+        },
+      ],
+    };
+    expect(subtreeExecNs(join)).toBe(100);
+    const annotated = annotatePlan(join);
+    expect(annotated.map((n) => [n.node.name, n.depth, n.label])).toEqual([
+      ["nlJoin", 0, undefined],
+      ["scan", 1, "inner"],
+    ]);
+    expect(annotated[1]?.isHotspot).toBe(true);
+  });
+
   it("keyAttribute prefers collection over condition", () => {
     expect(keyAttribute(tree.children[0]!)).toBe("collection=movies");
     expect(keyAttribute(tree.children[1]!)).toBe("condition=rated = PG");
@@ -171,6 +247,66 @@ describe("renderProfile", () => {
     expect(out).toContain("collection=movies");
     expect(out).toContain("legend");
     expect(out).toContain("▲ HOT"); // filter dominates exec in this fixture
+  });
+
+  it("renders SDK 5.2.0 detail: phase times, yields, attributes, inner subplan, totals", () => {
+    const profile = parseProfileItem(joinRow)!;
+    const out = renderProfile(profile, "SELECT …");
+    expect(out).toMatch(/directives #profile/);
+    expect(out).toMatch(/request \S+/);
+    expect(out).toMatch(/flags 0x/);
+    expect(out).toMatch(/Stor \d/);
+    expect(out).toMatch(/Yields \d/);
+    expect(out).toContain("inner: sequence");
+    expect(out).toMatch(/stor \d/);
+    expect(out).toMatch(/recv \d/);
+    expect(out).toMatch(/yields: \w+ \d/);
+    expect(out).toContain("alias=y");
+    expect(out).toContain("legend");
+    expect(out).toContain("yields = scheduler yields");
+  });
+
+  it("renders skipped docs, sorts yields by count, and truncates long attributes", () => {
+    const out = renderProfile(
+      {
+        times: { elapsedNs: 1 },
+        plan: {
+          name: "fetch",
+          attributes: [
+            ["collection", "c"],
+            ["desc", { spans: "x".repeat(200) }],
+          ],
+          stats: {
+            documentsIn: 5,
+            documentsOut: 2,
+            documentsSkipped: 3,
+            phaseTimes: { exec: 1, stor: 2_000 },
+            yields: { receiver: 1, budget: 1_500 },
+          },
+          children: [],
+        },
+      },
+      "SELECT 1",
+    );
+    expect(out).toContain("5 in / 2 out / 3 skipped");
+    expect(out).toContain("yields: budget 1,500 · receiver 1");
+    expect(out).toContain("stor 2.00 µs");
+    expect(out).toContain("Stor 2.00 µs");
+    expect(out).toContain("Yields 1,501");
+    expect(out).toMatch(/desc=\{"spans":"x+…/);
+    expect(out).not.toContain("x".repeat(100));
+    expect(out).not.toContain("collection=c collection"); // key attribute isn't repeated
+  });
+
+  it("omits the metadata line, totals, and detail lines when the envelope lacks them", () => {
+    const out = renderProfile(
+      { times: {}, plan: { name: "scan", attributes: [], children: [] } },
+      "SELECT 1",
+    );
+    expect(out).not.toContain("directives");
+    expect(out).not.toContain("Stor ");
+    expect(out).not.toContain("Yields ");
+    expect(out).not.toContain("yields:");
   });
 
   it("handles a profile with no plan gracefully", () => {
