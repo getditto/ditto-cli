@@ -30,6 +30,27 @@ describe("detectChannel", () => {
     expect(c.updateCommand).toBe("npm i -g @dittolive/cli@latest");
   });
 
+  it("recognizes Windows npm installs across separators and case", () => {
+    const c = detectChannel({
+      argv1:
+        "C:\\Users\\Developer\\AppData\\Roaming\\npm\\node_modules\\@dittolive\\cli\\dist\\cli.js",
+      npmPrefix: "c:/users/developer/appdata/roaming/npm/",
+      brewPrefix: "/unused",
+    });
+    expect(c.channel).toBe("npm");
+    expect(c.updateCommand).toBe("npm i -g @dittolive/cli@latest");
+  });
+
+  it("does not mistake a similarly named sibling directory for npm's prefix", () => {
+    expect(
+      detectChannel({
+        argv1: "/example/node_modules-local/@dittolive/cli/dist/cli.js",
+        npmPrefix: "/example",
+        brewPrefix: "/unused",
+      }).channel,
+    ).toBe("unknown");
+  });
+
   it("npx cache and project-local devDeps are NOT claimed as npm global", () => {
     const npx = detectChannel({
       argv1: "/home/u/.npm/_npx/abc123/node_modules/@dittolive/cli/dist/cli.js",

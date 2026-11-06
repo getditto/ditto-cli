@@ -50,8 +50,20 @@ describe("e2e: ditto version / update / banner", () => {
     expect(bad.exitCode).toBe(2);
   });
 
-  it("update --check degrades gracefully pre-publish (registry 404 → exit 1, clean message)", async () => {
-    const r = (await cli(["update", "--check"])) as unknown as RunResult;
+  it("update --check reports a registry 404 without depending on publication state", async () => {
+    const r = await execa(
+      process.execPath,
+      [
+        "--import",
+        "tsx",
+        "--import",
+        "./tests/helpers/deny-network.ts",
+        "src/cli/index.ts",
+        "update",
+        "--check",
+      ],
+      { cwd: ROOT, reject: false, input: "" },
+    );
     expect(r.exitCode).toBe(1);
     expect(r.stderr).toContain("Update check failed");
     expect(r.stdout).not.toContain("update available");

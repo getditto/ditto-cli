@@ -32,10 +32,12 @@ export function detectChannel(
     resolved = argv1;
   }
 
+  resolved = comparablePath(resolved);
   const brewPrefix = opts.brewPrefix ?? readCmdPrefix("brew", "--prefix");
+  const brewRoot = brewPrefix && comparablePath(brewPrefix);
   if (
-    brewPrefix &&
-    (resolved.startsWith(`${brewPrefix}/Cellar/`) || resolved.startsWith(`${brewPrefix}/Caskroom/`))
+    brewRoot &&
+    (resolved.startsWith(`${brewRoot}/Cellar/`) || resolved.startsWith(`${brewRoot}/Caskroom/`))
   ) {
     return {
       channel: "homebrew",
@@ -45,15 +47,16 @@ export function detectChannel(
   }
 
   const npmPrefix = opts.npmPrefix ?? readCmdPrefix("npm", "prefix", "-g");
+  const npmRoot = npmPrefix && comparablePath(npmPrefix);
   const npmRoots = [
-    npmPrefix && `${npmPrefix}/lib/node_modules`,
-    npmPrefix && `${npmPrefix}/node_modules`,
+    npmRoot && `${npmRoot}/lib/node_modules/`,
+    npmRoot && `${npmRoot}/node_modules/`,
   ].filter(Boolean) as string[];
   if (
     npmRoots.some((r) => resolved.startsWith(r)) ||
     // only the *global* layout counts — npx caches (_npx/<hash>/node_modules)
     // and project-local devDeps must not be claimed as "npm global"
-    resolved.includes("/lib/node_modules/@dittolive/cli")
+    resolved.includes("/lib/node_modules/@dittolive/cli/")
   ) {
     return {
       channel: "npm",
@@ -69,9 +72,31 @@ export function detectChannel(
   return { channel: "unknown", updateCommand: null, detail: `unknown (${resolved || execPath})` };
 }
 
+/** Compare Windows separators/case and resolved prefix paths consistently. */
+function comparablePath(value: string): string {
+  let canonical = value;
+  try {
+    canonical = fs.realpathSync(value);
+  } catch {
+    // A missing path can still be classified (including injected test prefixes).
+  }
+  canonical = canonical.replaceAll("\\", "/").replace(/\/+$/, "");
+  return /^[a-z]:\//i.test(canonical) ? canonical.toLowerCase() : canonical;
+}
+
 /** Read `brew --prefix` / `npm prefix -g` — undefined when the tool is absent. */
 function readCmdPrefix(cmd: string, ...args: string[]): string | undefined {
   try {
+    // npm is an npm.cmd shim on Windows; execFile cannot launch it directly.
+    // The command string is fixed and contains no user-provided arguments.
+    if (process.platform === "win32" && cmd === "npm") {
+      return (
+        execFileSync("cmd.exe", ["/d", "/c", "npm prefix -g"], {
+          encoding: "utf8",
+          stdio: ["ignore", "pipe", "ignore"],
+        }).trim() || undefined
+      );
+    }
     return (
       execFileSync(cmd, args, { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim() ||
       undefined

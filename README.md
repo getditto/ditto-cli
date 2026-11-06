@@ -21,7 +21,19 @@ npm i -g @dittolive/cli          # npm (primary)
 brew install getditto/tap/dittosh # Homebrew (macOS/Linux)
 ```
 
-The binary is `dittosh`. Requires Node.js ≥ 20 for npm installs. Supported platforms (matching the Ditto Node SDK): **macOS arm64, Linux x64/arm64, Windows x64**. Intel Macs (darwin-x64) are not supported by SDK 5.1.0.
+The binary is `dittosh`. Requires Node.js ≥ 22 for npm installs; Homebrew manages Node.js 24. Supported platforms (matching the Ditto Node SDK): **macOS arm64, Linux x64/arm64, Windows x64**. Intel Macs (darwin-x64) are not supported by SDK 5.1.0.
+
+Update using the package manager you installed with:
+
+```bash
+npm install -g @dittolive/cli@latest
+# or
+brew update && brew upgrade dittosh
+```
+
+`dittosh update` detects npm or Homebrew and runs the matching update command.
+Maintainers: see [Publishing releases](docs/publishing.md) for the tag workflow,
+required release notes, npm authentication, and Homebrew tap setup.
 
 The CLI ships with a built-in offline license and runs entirely locally — no account, no credentials, no sync. `startSync()` is never called. All your data lives in one local directory (see [Data directory](#data-directory)).
 

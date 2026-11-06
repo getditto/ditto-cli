@@ -33,6 +33,8 @@ jobs:
       - run: npm run typecheck
       - run: npm run test:unit
       - run: npm run build
+      - name: Verify release notes, stamped packaging, and npm installation
+        run: npm run release:check
       - name: bundle contains no raw token (guard for M8 token stamping)
         run: |
           if [ -n "${{ secrets.DQL_OFFLINE_LICENSE }}" ] && grep -rqF "${{ secrets.DQL_OFFLINE_LICENSE }}" dist/; then

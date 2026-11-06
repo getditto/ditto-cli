@@ -231,18 +231,24 @@ describe("e2e: ditto skills (fixture tarball seam)", () => {
     }
   });
 
-  it("private-repo guidance when the seam is absent and no token (real network path)", async () => {
-    const home = tmpDataDir("ditto-e2e-home-");
-    try {
-      const r = (await cli(["skills", "add", "--agent", "claude"], {
-        HOME: home,
-      })) as unknown as RunResult;
-      // Private repo without a token: actionable guidance, stdout stays empty
-      expect(r.exitCode).toBe(1);
-      expect(r.stderr).toContain("GITHUB_TOKEN");
-      expect(r.stdout).toBe("");
-    } finally {
-      rmrf(home);
-    }
+  it("prints authentication guidance when GitHub rejects the request", async () => {
+    const r = await execa(
+      process.execPath,
+      [
+        "--import",
+        "tsx",
+        "--import",
+        "./tests/helpers/deny-network.ts",
+        "src/cli/index.ts",
+        "skills",
+        "add",
+        "--agent",
+        "claude",
+      ],
+      { cwd: ROOT, reject: false, input: "" },
+    );
+    expect(r.exitCode).toBe(1);
+    expect(r.stderr).toContain("GITHUB_TOKEN");
+    expect(r.stdout).toBe("");
   });
 });
