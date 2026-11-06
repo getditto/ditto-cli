@@ -57,6 +57,23 @@ export const AGENTS: AgentSpec[] = [
     projectFile: null,
   },
   {
+    // Antigravity (Google): global skills live under ~/.gemini/config/skills
+    // (legacy ~/.gemini/antigravity/skills is still read by the IDE — both are
+    // detection markers). Project scope is the shared .agents/skills convention
+    // (already covered by the opencode target, but Antigravity users get an
+    // explicit target so `--agent antigravity` works and detection isn't tied
+    // to another agent's config).
+    name: "antigravity",
+    globalDir: (home) => path.join(home, ".gemini", "config", "skills"),
+    projectDir: path.join(".agents", "skills"),
+    globalMarkers: [
+      (home) => path.join(home, ".gemini", "antigravity"),
+      (home) => path.join(home, ".gemini", "config"),
+    ],
+    projectMarkers: [".agents"],
+    projectFile: null,
+  },
+  {
     name: "cursor",
     globalDir: null, // Cursor has no global skills dir — project rules only
     projectDir: path.join(".cursor", "rules"),
