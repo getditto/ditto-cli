@@ -66,7 +66,7 @@ scripts/install-release.sh # stamp token → RELEASE=true build → npm i -g . (
 
 ## Known platform facts
 
-- SDK `@dittolive/ditto@5.1.0` native matrix: macOS arm64, Linux x64/arm64, Windows x64 (no darwin-x64).
+- SDK `@dittolive/ditto@5.2.0` native matrix: macOS arm64, Linux x64/arm64, Windows x64 (no darwin-x64).
 - `DittoConfig(appId, { mode: "smallPeersOnly" }, dir)` + `Ditto.open` + `setOfflineOnlyLicenseToken` — verified (Spike A). EXPLAIN → first item `plan`; PROFILE → trailing `~request_profile` item.
 - The native tracing bootstrap writes ~7 WARN/INFO lines to **stderr** at `sdk.init()` (fd-level, not suppressible from JS). Cosmetic only; stdout is clean.
 - Two processes on one data dir → "File already locked" → mapped to `LockError` (exit 4).

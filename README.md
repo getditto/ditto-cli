@@ -21,7 +21,7 @@ npm i -g @dittolive/cli          # npm (primary)
 brew install getditto/tap/dittosh # Homebrew (macOS/Linux)
 ```
 
-The binary is `dittosh`. Requires Node.js ≥ 22 for npm installs; Homebrew manages Node.js 24. Supported platforms (matching the Ditto Node SDK): **macOS arm64, Linux x64/arm64, Windows x64**. Intel Macs (darwin-x64) are not supported by SDK 5.1.0.
+The binary is `dittosh`. Requires Node.js ≥ 22 for npm installs; Homebrew manages Node.js 24. Supported platforms (matching the Ditto Node SDK): **macOS arm64, Linux x64/arm64, Windows x64**. Intel Macs (darwin-x64) are not supported by SDK 5.2.0.
 
 Update using the package manager you installed with:
 
