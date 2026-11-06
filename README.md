@@ -171,6 +171,20 @@ Semantics: `add` never upgrades an existing install (it skips; `--force` overwri
 
 Agent targets: Claude Code (`~/.claude/skills` or `.claude/skills`), OpenCode (`~/.agents/skills` or `.agents/skills`), Codex (`~/.codex/skills`), Gemini (`~/.gemini/skills`), Antigravity (`~/.gemini/config/skills` or `.agents/skills`), Cursor (`.cursor/rules`, project-only), Copilot + Windsurf (project instruction files). While `getditto/agent-skills` is private, set `GITHUB_TOKEN` (e.g. `GITHUB_TOKEN=$(gh auth token)`).
 
+### `dittosh tutorial` — learn the CLI and DQL
+
+```bash
+dittosh tutorial                       # write ./dittosh-tutorial.md, a hands-on walkthrough of the CLI
+dittosh tutorial -o ~/t.md --force     # choose the file / overwrite
+dittosh tutorial --stdout              # print the Markdown instead
+dittosh tutorial --interactive         # guided DQL lessons in a learn> shell
+dittosh tutorial --interactive --level advanced   # start at beginner | intermediate | advanced
+```
+
+The Markdown tutorial is tailored to this install (CLI and SDK version, Homebrew or npm upgrade commands, platform) and covers importing, querying, exporting, the interactive shell and `.metrics`, sample datasets, `--explain`/`--profile`/`--advise`, joins, what's new in DQL for SDK 5.2, and agent skills. Every runnable command in it is exercised by the e2e suite.
+
+The interactive lessons teach DQL concepts — documents and collections, projection, predicates, boolean logic, sorting, writes, expressions and functions, `CASE`, MISSING vs NULL, aggregation and grouping, joins, `ANY … SATISFIES`, indexes, `EXPLAIN`, `PROFILE`, and system collections — in 27 lessons across beginner, intermediate, and advanced levels. Each lesson explains the idea (with an "if you know SQL" note), shows the syntax, sets a task, and checks your answer. They run in a separate practice store (`<config dir>/tutorial-store`) and save your progress; inside, use `.hint`, `.answer`, `.next`/`.back`, `.lessons`, `.level <name>`, `.goto <n>`, `.reset`, and `.exit`.
+
 ### Planned for later milestones
 
 `dittosh version`, `dittosh update` (self-update banner + channel-aware upgrade).
