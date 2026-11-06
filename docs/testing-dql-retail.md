@@ -68,7 +68,7 @@ Two things that are **not** bugs:
   dittosh version --format json | jq '.ditto_sdk'
   ```
   Expect: aligned key/value list (version, SDK, channel, token expiry,
-  paths); the JSON form parses and reports `"5.1.0"`.
+  paths); the JSON form parses and reports `"5.2.0"`.
 
 - [ ] **Collections**
   ```bash

@@ -21,7 +21,7 @@ npm i -g @dittolive/cli          # npm (primary)
 brew install getditto/tap/dittosh # Homebrew (macOS/Linux)
 ```
 
-The binary is `dittosh`. Requires Node.js ≥ 22 for npm installs; Homebrew manages Node.js 24. Supported platforms (matching the Ditto Node SDK): **macOS arm64, Linux x64/arm64, Windows x64**. Intel Macs (darwin-x64) are not supported by SDK 5.1.0.
+The binary is `dittosh`. Requires Node.js ≥ 22 for npm installs; Homebrew manages Node.js 24. Supported platforms (matching the Ditto Node SDK): **macOS arm64, Linux x64/arm64, Windows x64**. Intel Macs (darwin-x64) are not supported by SDK 5.2.0.
 
 Update using the package manager you installed with:
 
@@ -84,7 +84,7 @@ dittosh dql                                            # interactive REPL
 | `--continue-on-error` | keep running after a failure (batch mode) |
 | `--time` | timing footer (host wall-clock + server parse/plan/elapsed when profiling) |
 | `--explain` | print the query plan (EXPLAIN side-trip, SELECTs only) |
-| `--profile` | print the execution profile with per-operator timings and hotspot flags (SELECTs only) |
+| `--profile` | print the execution profile with per-operator timings (exec/recv/send/stor), document counts, scheduler yields, join subplans, and hotspot flags (SELECTs only) |
 | `--advise` | print index advice (ADVISE, SELECTs only) |
 | `--apply` | apply ADVISE's suggested `CREATE INDEX` statements (prompts; `-y` skips) |
 | `-y, --yes` | skip confirmation prompts |
@@ -171,6 +171,20 @@ Semantics: `add` never upgrades an existing install (it skips; `--force` overwri
 
 Agent targets: Claude Code (`~/.claude/skills` or `.claude/skills`), OpenCode (`~/.agents/skills` or `.agents/skills`), Codex (`~/.codex/skills`), Gemini (`~/.gemini/skills`), Antigravity (`~/.gemini/config/skills` or `.agents/skills`), Cursor (`.cursor/rules`, project-only), Copilot + Windsurf (project instruction files). While `getditto/agent-skills` is private, set `GITHUB_TOKEN` (e.g. `GITHUB_TOKEN=$(gh auth token)`).
 
+### `dittosh tutorial` — learn the CLI and DQL
+
+```bash
+dittosh tutorial                       # write ./dittosh-tutorial.md, a hands-on walkthrough of the CLI
+dittosh tutorial -o ~/t.md --force     # choose the file / overwrite
+dittosh tutorial --stdout              # print the Markdown instead
+dittosh tutorial --interactive         # guided DQL lessons in a learn> shell
+dittosh tutorial --interactive --level advanced   # start at beginner | intermediate | advanced
+```
+
+The Markdown tutorial is tailored to this install (CLI and SDK version, Homebrew or npm upgrade commands, platform) and covers importing, querying, exporting, the interactive shell and `.metrics`, sample datasets, `--explain`/`--profile`/`--advise`, joins, what's new in DQL for SDK 5.2, and agent skills. Every runnable command in it is exercised by the e2e suite.
+
+The interactive lessons teach DQL concepts — documents and collections, projection, predicates, boolean logic, sorting, writes, expressions and functions, `CASE`, MISSING vs NULL, aggregation and grouping, joins, `ANY … SATISFIES`, indexes, `EXPLAIN`, `PROFILE`, and system collections — in 27 lessons across beginner, intermediate, and advanced levels. Each lesson explains the idea (with an "if you know SQL" note), shows the syntax, sets a task, and checks your answer. They run in a separate practice store (`<config dir>/tutorial-store`) and save your progress; inside, use `.hint`, `.answer`, `.next`/`.back`, `.lessons`, `.level <name>`, `.goto <n>`, `.reset`, and `.exit`.
+
 ### Planned for later milestones
 
 `dittosh version`, `dittosh update` (self-update banner + channel-aware upgrade).
@@ -208,7 +222,9 @@ dittosh dql --advise --apply -y "SELECT …"  # apply them
 
 ## REPL
 
-Bare `dittosh dql` starts an interactive session: multi-line statements terminated with `;`, history, per-statement timing, dot-commands (`.help`, `.collections`, `.indexes [name]`, `.break`, `.exit`).
+Bare `dittosh dql` starts an interactive session: multi-line statements terminated with `;`, history, per-statement timing, dot-commands (`.help`, `.collections`, `.indexes [name]`, `.metrics [section]`, `.break`, `.exit`).
+
+`.metrics` shows the SDK's live system metrics for the session as formatted tables — store (SQLite transactions, fsync, WAL size, commit/lock timings) and query/DQL (requests, selects, failures, parse/plan/execution time) by default. Totals run since the session opened; the Change, p50/p90/p99 and Max columns cover the time since the previous `.metrics`. `.metrics query` or `.metrics store` narrows the view; `.metrics all` adds network, sync, transport, and the other sections.
 
 ## Development
 

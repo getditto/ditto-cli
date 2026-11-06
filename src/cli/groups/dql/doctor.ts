@@ -11,7 +11,7 @@ export interface DoctorCheck {
   detail: string;
 }
 
-/** Native matrix of @dittolive/ditto@5.1.0 (verified from the npm tarball). */
+/** Native matrix of @dittolive/ditto@5.2.0 (verified from the npm tarball). */
 const SUPPORTED: Record<string, string[]> = {
   darwin: ["arm64"],
   linux: ["x64", "arm64"],
@@ -55,7 +55,7 @@ export async function collectDoctorChecks(opts: DoctorOptions = {}): Promise<Doc
     label: "platform",
     detail: platformOk
       ? `${platform}/${arch} supported`
-      : `${platform}/${arch} is not supported by the Ditto Node SDK 5.1.0 (supported: macOS arm64, Linux x64/arm64, Windows x64)`,
+      : `${platform}/${arch} is not supported by the Ditto Node SDK 5.2.0 (supported: macOS arm64, Linux x64/arm64, Windows x64)`,
   });
 
   const nodeMajor = Number(nodeVersion.split(".")[0]);

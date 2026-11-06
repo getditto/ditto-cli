@@ -240,7 +240,7 @@ hard error — and the error itself tells you what to do next.
   dittosh version
   dittosh version --format json | jq '.ditto_sdk'
   ```
-  Expect: aligned key/value list; the JSON form reports `"5.1.0"`.
+  Expect: aligned key/value list; the JSON form reports `"5.2.0"`.
 
 - [ ] **Collections**
   ```bash

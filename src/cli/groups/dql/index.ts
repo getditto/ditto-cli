@@ -49,7 +49,7 @@ interface ExecOpts {
 /** days until expiry at which the user gets a heads-up on every run. */
 const EXPIRY_NAG_DAYS = 14;
 
-async function openSession(opts: ExecOpts): Promise<DittoSession | null> {
+export async function openSession(opts: ExecOpts): Promise<DittoSession | null> {
   // Bogus data-dir values (commander artifacts like `-d --`) fail fast for
   // EVERY store-opening command. Mirror resolveDataDir's fallthrough: an
   // empty/whitespace flag means the env var wins — check the EFFECTIVE value.

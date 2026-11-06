@@ -101,7 +101,16 @@ export class DittoSession {
       initialized = true;
     }
 
-    const config = new sdk.DittoConfig(identity.appId, { mode: "smallPeersOnly" }, dataDir);
+    // `metrics_exporter_virtual_collection_enabled` is startup-gated (runtime
+    // ALTER SYSTEM is ignored) and only accepted through the options-object
+    // constructor (SDK 5.2+). It backs the REPL's `.metrics` command via
+    // `SELECT * FROM system:metrics`; Info-level metrics are cheap.
+    const config = new sdk.DittoConfig({
+      databaseID: identity.appId,
+      connect: { mode: "smallPeersOnly" },
+      persistenceDirectory: dataDir,
+      systemParameters: { metrics_exporter_virtual_collection_enabled: true },
+    });
     let ditto: sdk.Ditto;
     try {
       ditto = await sdk.Ditto.open(config);

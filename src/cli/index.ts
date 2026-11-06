@@ -1,9 +1,11 @@
 import chalk from "chalk";
 import { Command, CommanderError } from "commander";
 import { rewriteDefaultSubcommand } from "./default-command.js";
-import { registerDqlGroup } from "./groups/dql/index.js";
+import { openSession, registerDqlGroup } from "./groups/dql/index.js";
 import { registerSkillsGroup } from "./groups/skills/index.js";
 import { registerSystemGroup } from "./groups/system/index.js";
+import { defaultTutorialDeps, registerTutorialCommand } from "./groups/tutorial.js";
+import { startTutorialShell } from "./groups/tutorial-repl.js";
 import { installStdoutGuard } from "./streams.js";
 import { maybeShowUpdateBanner } from "./update-banner.js";
 import { CLI_VERSION } from "./version.js";
@@ -33,6 +35,11 @@ const skills = program.command("skills");
 registerSkillsGroup(skills);
 
 registerSystemGroup(program);
+
+registerTutorialCommand(program, {
+  ...defaultTutorialDeps,
+  startInteractive: (opts) => startTutorialShell(openSession, opts),
+});
 
 // Global flags take effect before any subcommand action runs.
 program.hook("preSubcommand", () => {

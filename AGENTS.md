@@ -15,10 +15,12 @@ The Ditto CLI: an npm/Homebrew-installable TypeScript CLI (binary `dittosh` — 
 
 ## Layout
 
-- `src/cli/` — commander entry (`index.ts`), injected version (`version.ts`, tsup `define`), `groups/` per command group (`dql`, `skills`, `system`)
+- `src/cli/` — commander entry (`index.ts`), injected version (`version.ts`, tsup `define`), `groups/` per command group (`dql`, `skills`, `system`, `tutorial`)
 - `src/config/` — data-dir resolution (`--data-dir` > `DITTOSH_DATA_DIR` > OS default), config dir (`DITTOSH_CONFIG_DIR` > OS default; env-paths caches homedir at module load, so tests must use this override, not `$HOME`), persisted state (one-time warnings, update cache)
 - `src/identity/` — token loading (dev env / release reassembly), expiry
-- `src/ditto/session.ts` — the only SDK touchpoint: init/open/close, log taming, lock mapping
+- `src/ditto/session.ts` — the only SDK touchpoint: init/open/close, log taming, lock mapping; enables the startup-gated `system:metrics` exporter (`systemParameters`)
+- `src/tutorial/` — `dittosh tutorial`: Markdown walkthrough as structured blocks (`content.ts`, runnable blocks executed by `tests/e2e/tutorial.test.ts`) and interactive DQL lessons (`lessons.ts` by level, `runner.ts`, `lesson-eval.ts`; every sample answer verified in `tests/integration/lessons.test.ts`). Wiring: `src/cli/groups/tutorial.ts`, `tutorial-repl.ts`
+- `src/metrics/` — `system:metrics` row parsing and section grouping (REPL `.metrics`, rendered by `src/render/metrics.ts`)
 - `src/query/` — statement classifier, splitter, param binding, result extraction, row cap
 - `src/render/` — table (terminal-width fitting)/JSON/CSV/markdown/HTML/vertical, pager (`$PAGER`/`less`, `--no-pager`/`DITTOSH_NO_PAGER`), `-o/--out`, (M4: explain/profile/advise renderers)
 - `datasets/` — vendored benchmark suite definitions (movies, retail, retail-joins, pos); **no generated data ever committed**
@@ -66,7 +68,7 @@ scripts/install-release.sh # stamp token → RELEASE=true build → npm i -g . (
 
 ## Known platform facts
 
-- SDK `@dittolive/ditto@5.1.0` native matrix: macOS arm64, Linux x64/arm64, Windows x64 (no darwin-x64).
+- SDK `@dittolive/ditto@5.2.0` native matrix: macOS arm64, Linux x64/arm64, Windows x64 (no darwin-x64).
 - `DittoConfig(appId, { mode: "smallPeersOnly" }, dir)` + `Ditto.open` + `setOfflineOnlyLicenseToken` — verified (Spike A). EXPLAIN → first item `plan`; PROFILE → trailing `~request_profile` item.
 - The native tracing bootstrap writes ~7 WARN/INFO lines to **stderr** at `sdk.init()` (fd-level, not suppressible from JS). Cosmetic only; stdout is clean.
 - Two processes on one data dir → "File already locked" → mapped to `LockError` (exit 4).

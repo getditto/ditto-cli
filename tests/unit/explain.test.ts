@@ -8,7 +8,7 @@ const fixture = JSON.parse(
 ) as { explain: Record<string, unknown> };
 
 describe("renderExplain", () => {
-  it("renders the operator tree from a real EXPLAIN doc (SDK 5.1.0)", () => {
+  it("renders the operator tree from a real EXPLAIN doc (SDK 5.2.0)", () => {
     const out = renderExplain(fixture.explain);
     expect(out).toContain("Query plan");
     expect(out).toContain("sequence");
