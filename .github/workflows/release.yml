@@ -9,6 +9,10 @@ on:
         description: "Build and test without publishing"
         type: boolean
         default: true
+      homebrew-test:
+        description: "Publish the reviewed v0.1.0 tag to GitHub for Homebrew testing only"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -20,11 +24,17 @@ concurrency:
 
 env:
   RELEASE_TAG: ${{ github.ref_name }}
-  DITTOSH_NO_UPDATE_CHECK: "1"
 
 jobs:
+  homebrew-test:
+    if: github.event_name == 'workflow_dispatch' && inputs.homebrew-test
+    uses: ./.github/workflows/homebrew-test-release.yml
+    permissions:
+      contents: write
+    secrets: inherit
+
   prepare:
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') && !inputs.homebrew-test
     runs-on: ubuntu-24.04
     outputs:
       version: ${{ steps.validate.outputs.version }}

@@ -1,0 +1,149 @@
+# One-time Homebrew bootstrap, pinned to the reviewed v0.1.0 source commit.
+# Invoke through Release's homebrew-test input. No npm or cross-repository writes.
+name: Homebrew v0.1.0 test release
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ac9510e6ebc1118341a63cf8b8b398d41b88bb91
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify the reviewed release tag
+        run: test "$(git rev-parse 'refs/tags/v0.1.0^{commit}')" = "$(git rev-parse HEAD)"
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: "24"
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run test:unit
+      - name: Build the stamped release archive
+        env:
+          OFFLINE_TOKEN: ${{ secrets.DQL_OFFLINE_LICENSE }}
+          DATABASE_ID: ${{ secrets.DITTO_DATABASE_ID }}
+        run: node --import tsx scripts/release.ts build v0.1.0
+      - name: Point the formula at the GitHub release archive
+        run: |
+          node --import tsx --input-type=module <<'JS'
+          import fs from 'node:fs';
+          import { digest, formula } from './scripts/release.ts';
+          const archive = 'build/release/dittolive-cli-0.1.0.tgz';
+          const url = 'https://github.com/getditto/ditto-cli/releases/download/v0.1.0/dittolive-cli-0.1.0.tgz';
+          fs.writeFileSync('build/release/dittosh.rb', formula('0.1.0', digest(fs.readFileSync(archive)), url));
+          JS
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: homebrew-v0.1.0
+          path: |
+            build/release/*.tgz
+            build/release/SHA256SUMS
+            build/release/dittosh.rb
+          if-no-files-found: error
+
+  quality:
+    needs: build
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ac9510e6ebc1118341a63cf8b8b398d41b88bb91
+          persist-credentials: false
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: "24"
+      - run: npm ci
+      - name: Integration coverage and end-to-end tests
+        env:
+          OFFLINE_TOKEN: ${{ secrets.DQL_OFFLINE_LICENSE }}
+          DATABASE_ID: ${{ secrets.DITTO_DATABASE_ID }}
+        run: |
+          test -n "$OFFLINE_TOKEN" && test -n "$DATABASE_ID"
+          npm run coverage
+          npm run test:e2e
+
+  install:
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ac9510e6ebc1118341a63cf8b8b398d41b88bb91
+          persist-credentials: false
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: "24"
+      - run: npm ci
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: homebrew-v0.1.0
+          path: build/release
+      - uses: Homebrew/actions/setup-homebrew@c262868c096d909fc278daa87ed9772967331ea3
+      - name: Install and test the exact release archive with Homebrew
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+          HOMEBREW_NO_INSTALL_CLEANUP: "1"
+        run: node --import tsx scripts/release-smoke.ts homebrew v0.1.0
+
+  publish:
+    needs: [build, quality, install]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ac9510e6ebc1118341a63cf8b8b398d41b88bb91
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: homebrew-v0.1.0
+          path: build/release
+      - name: Verify archive checksum and unchanged tag
+        run: |
+          test "$(git rev-parse 'refs/tags/v0.1.0^{commit}')" = "$(git rev-parse HEAD)"
+          cd build/release
+          sha256sum -c SHA256SUMS
+      - name: Prepare Homebrew test release notes
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          notes = Path('releases/v0.1.0.md').read_text()
+          notes = notes.replace('npm install -g @dittolive/cli\nnpm install -g @dittolive/cli@latest\n\n', '')
+          notes = notes.replace('The command is `dittosh`. npm installation requires Node.js 22 or newer;\nHomebrew manages Node.js 24.', 'The command is `dittosh`. Homebrew manages Node.js 24.')
+          notes = notes.replace('Linux x64/arm64, and Windows x64 (npm).', 'and Linux x64/arm64 for this Homebrew test.')
+          notes = notes.replace('Homebrew publication follows the GitHub/npm release in\nthe same workflow.', 'The formula downloads the archive attached to this GitHub release.\nMerge [tap PR #1](https://github.com/getditto/homebrew-tap/pull/1) before installing.\nPublishing @dittolive/cli to npm is deferred; no npm account is required.')
+          notes = notes.replace('Run `dittosh update` to update through the detected package manager.', 'Use `brew update && brew upgrade dittosh` for Homebrew updates.')
+          Path('build/release/notes.md').write_text(notes)
+          PY
+      - name: Publish GitHub assets without npm or tap credentials
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # A completed release is immutable. Any retry must inspect it first.
+          existing=$(gh api 'repos/getditto/ditto-cli/releases?per_page=100' --jq '.[] | select(.tag_name == "v0.1.0") | .draft')
+          if [ "$existing" = false ]; then
+            echo '::error::v0.1.0 is already published; do not replace its assets.'
+            exit 1
+          fi
+          if [ -z "$existing" ]; then
+            gh release create v0.1.0 --repo getditto/ditto-cli --verify-tag --draft \
+              --title 'dittosh v0.1.0' --notes-file build/release/notes.md
+          fi
+          gh release upload v0.1.0 --repo getditto/ditto-cli --clobber \
+            build/release/dittolive-cli-0.1.0.tgz build/release/SHA256SUMS build/release/dittosh.rb
+          gh release edit v0.1.0 --repo getditto/ditto-cli --draft=false \
+            --notes-file build/release/notes.md
