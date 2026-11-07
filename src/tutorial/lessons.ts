@@ -151,7 +151,7 @@ function dqlLiteral(v: unknown): string {
 }
 
 function insertAll(collection: string, docs: readonly object[]): string {
-  return `INSERT INTO ${collection} DOCUMENTS ${docs.map((d) => `(${dqlLiteral(d)})`).join(", ")} ON ID CONFLICT DO UPDATE`;
+  return `INSERT INTO ${collection} VALUES ${docs.map((d) => `(${dqlLiteral(d)})`).join(", ")} ON ID CONFLICT DO UPDATE`;
 }
 
 /** Restore the practice data exactly (`.reset`, and every start). */
@@ -224,11 +224,15 @@ export const LESSONS: Lesson[] = [
     concept: `A Ditto database stores **documents**: self-describing records made of fields,
 like \`{ name: 'Green tea', price: 9 }\`. Documents are grouped into **collections**,
 and every document has a unique \`_id\`. A **query** asks the database for the
-documents you want; DQL (Ditto Query Language) is how you write one.`,
+documents you want; DQL (Ditto Query Language) is how you write one.
+
+Collection and field names are **case-sensitive**: \`products\` and \`Products\` are
+two different collections, and querying one that doesn't exist just returns
+nothing. Keywords like \`SELECT\` and \`FROM\` work in any case.`,
     sql: "A collection is like a table and a document like a row, except documents in one collection don't need the same fields.",
     syntax: ["SELECT * FROM collection"],
     task: "Show every document in the `products` collection.",
-    hint: "`SELECT *` means all fields; `FROM products` names the collection.",
+    hint: "`SELECT *` means every field; the collection's name goes after `FROM`.",
     answer: "SELECT * FROM products",
     check: ({ rows }) => expectProducts(rows, ALL_NAMES),
     success: "Six documents. Notice the different shapes: some have `details`, some a `discount`.",
@@ -242,10 +246,10 @@ next lesson. Think of filtering as picking rows and projection as picking column
 Asking only for what you need keeps results small and readable.`,
     sql: "Same as listing columns in SQL's SELECT clause.",
     syntax: [
-      "SELECT name, price FROM products",
-      "SELECT name AS product FROM products   -- rename",
+      "SELECT name, country FROM suppliers",
+      "SELECT name AS supplier FROM suppliers   -- rename",
     ],
-    task: "Show only the `name` and `price` of every product.",
+    task: "Show only the `name` and `price` of each product.",
     hint: "Replace `*` with a comma-separated list of fields.",
     answer: "SELECT name, price FROM products",
     check: ({ rows }) => {
@@ -268,8 +272,8 @@ only those where it's true. Text values go in single quotes; numbers don't.`,
       "SELECT * FROM products WHERE category = 'tea'",
       "SELECT * FROM products WHERE price > 10      -- also: = != < <= >=",
     ],
-    task: "Find the products in the `coffee` category (show at least their names).",
-    hint: "Add `WHERE category = 'coffee'`.",
+    task: "Find the products whose category is `coffee`, and show their names.",
+    hint: "Compare the `category` field to a text value in a WHERE clause — text goes in single quotes.",
     answer: "SELECT name, price FROM products WHERE category = 'coffee'",
     check: ({ rows }) => expectProducts(rows, ["Coffee beans", "Paper filters", "Espresso blend"]),
     success: "Filtering (WHERE) and projection (SELECT list) combine freely in one query.",
@@ -283,17 +287,17 @@ parentheses to make your intent clear. Shortcuts: \`BETWEEN low AND high\`
 (inclusive), \`IN [list]\`, and \`LIKE\` with \`%\` as a wildcard.`,
     sql: "The same operators as SQL; DQL writes IN lists with square brackets.",
     syntax: [
+      "SELECT name, stock FROM products WHERE stock BETWEEN 10 AND 40",
       "WHERE category = 'tea' AND price < 8",
       "WHERE (category = 'tea' OR category = 'coffee') AND stock > 0",
-      "WHERE price BETWEEN 5 AND 10",
       "WHERE category IN ['tea', 'accessories']",
       "WHERE name LIKE '%tea%'",
     ],
-    task: "Find the products that cost from 5 to 10, inclusive.",
-    hint: "Use `price BETWEEN 5 AND 10`, or `price >= 5 AND price <= 10`.",
+    task: "Find the products that cost between 5 and 10 (including exactly 5 or 10), and show their names.",
+    hint: "`BETWEEN low AND high` includes both ends — or combine `>=` and `<=` with AND.",
     answer: "SELECT name, price FROM products WHERE price BETWEEN 5 AND 10",
     check: ({ rows }) => expectProducts(rows, ["Paper filters", "Green tea", "Chai spices"]),
-    success: "`BETWEEN` includes both ends, so the 5.00 filters made the cut.",
+    success: "`BETWEEN` includes both ends, so Paper filters, at exactly 5, made the cut.",
   },
   {
     level: "beginner",
@@ -304,10 +308,10 @@ only the first n results, and \`OFFSET n\` skips some first (useful for paging).
     sql: "Same as SQL's ORDER BY / LIMIT / OFFSET.",
     syntax: [
       "SELECT name, price FROM products ORDER BY price",
-      "SELECT name, price FROM products ORDER BY price DESC LIMIT 3",
+      "SELECT name, stock FROM products ORDER BY stock DESC LIMIT 3",
     ],
-    task: "Show the two most expensive products, most expensive first.",
-    hint: "Combine `ORDER BY price DESC` with `LIMIT 2`.",
+    task: "Show the names of the two most expensive products, with the most expensive first.",
+    hint: "Sort high-to-low with `DESC`, then keep only the first rows with `LIMIT`.",
     answer: "SELECT name, price FROM products ORDER BY price DESC LIMIT 2",
     check: ({ rows }) => {
       const names = productNames(rows);
@@ -322,18 +326,20 @@ only the first n results, and \`OFFSET n\` skips some first (useful for paging).
     level: "beginner",
     title: "Inserting documents",
     concept: `Queries read data; **statements** like INSERT, UPDATE, and EVICT change it.
-\`INSERT INTO … DOCUMENTS (…)\` adds documents written as object literals. If a
-document with that \`_id\` already exists, the insert fails — unless you add
-\`ON ID CONFLICT DO UPDATE\`, which makes the insert safe to repeat.`,
-    sql: "Like INSERT … VALUES, but each document is a whole object.",
+\`INSERT INTO … VALUES (…)\` adds documents written as object literals — one or
+more, separated by commas. If a document with that \`_id\` already exists, the
+insert fails — unless you add \`ON ID CONFLICT DO UPDATE\`, which makes the
+insert safe to repeat. (Older examples use \`DOCUMENTS\` in place of \`VALUES\`;
+the two work the same.)`,
+    sql: "The same INSERT … VALUES you know, except each value is a whole document rather than a row of columns.",
     syntax: [
-      "INSERT INTO products DOCUMENTS ({'_id': 'p9', 'name': 'Kettle', 'price': 30})",
+      "INSERT INTO products VALUES ({'_id': 'p9', 'name': 'Kettle', 'price': 30})",
       "… ON ID CONFLICT DO UPDATE   -- upsert",
     ],
-    task: "Insert a product with `_id` 'p7', name 'Cold brew kit', category 'coffee', and price 25.",
-    hint: "`INSERT INTO products DOCUMENTS ({'_id': 'p7', 'name': 'Cold brew kit', …})`",
+    task: "Insert a new product with `_id` 'p7', name 'Cold brew kit', category 'coffee', and price 25.",
+    hint: "Write the fields as `'key': value` pairs inside `({ … })` — text in single quotes, numbers without.",
     answer:
-      "INSERT INTO products DOCUMENTS ({'_id': 'p7', 'name': 'Cold brew kit', 'category': 'coffee', 'price': 25})",
+      "INSERT INTO products VALUES ({'_id': 'p7', 'name': 'Cold brew kit', 'category': 'coffee', 'price': 25})",
     setup: ["EVICT FROM products WHERE _id = 'p7'"],
     check: async ({ query }) => {
       const [doc] = await query("SELECT * FROM products WHERE _id = 'p7'");
@@ -357,8 +363,8 @@ it, every document in the collection changes.`,
       "UPDATE products SET price = 10 WHERE _id = 'p3'",
       "UPDATE products SET stock = stock + 5 WHERE category = 'tea'",
     ],
-    task: "The Espresso blend (`_id` 'p4') was restocked. Set its `stock` to 25.",
-    hint: "`UPDATE products SET stock = 25 WHERE _id = 'p4'`",
+    task: "The Espresso blend (`_id` 'p4') has been restocked. Set its `stock` to 25.",
+    hint: "SET the field to its new value, and use WHERE on `_id` so only that one document changes.",
     answer: "UPDATE products SET stock = 25 WHERE _id = 'p4'",
     setup: ["UPDATE products SET stock = 0 WHERE _id = 'p4'"],
     check: async ({ query }) => {
@@ -376,10 +382,10 @@ document is gone. This CLI is offline-only, so here both affect just your store.
     sql: "EVICT has no SQL equivalent; DELETE is the closest.",
     syntax: ["EVICT FROM products WHERE _id = 'p9'"],
     task: "Evict the Cold brew kit (`_id` 'p7') from the local store.",
-    hint: "`EVICT FROM products WHERE _id = 'p7'`",
+    hint: "`EVICT FROM` the collection, with a WHERE that matches only that `_id`.",
     answer: "EVICT FROM products WHERE _id = 'p7'",
     setup: [
-      "INSERT INTO products DOCUMENTS ({'_id': 'p7', 'name': 'Cold brew kit', 'category': 'coffee', 'price': 25}) ON ID CONFLICT DO UPDATE",
+      "INSERT INTO products VALUES ({'_id': 'p7', 'name': 'Cold brew kit', 'category': 'coffee', 'price': 25}) ON ID CONFLICT DO UPDATE",
     ],
     check: async ({ query }) => {
       const rows = await query("SELECT _id FROM products WHERE _id = 'p7'");
@@ -403,8 +409,8 @@ returns a value: \`upper(name)\` turns 'Green tea' into 'GREEN TEA'. These are
       "SELECT concat(name, ' (', category, ')') AS label FROM products",
       "SELECT round(price / 3, 2) AS third FROM products",
     ],
-    task: "Show each product's name in upper case.",
-    hint: "Call `upper(name)` in the SELECT list.",
+    task: "Show the name of every product in upper case.",
+    hint: "DQL has text functions such as `lower()` and `upper()` — call one on `name` in the SELECT list.",
     answer: "SELECT name, upper(name) AS shout FROM products",
     check: ({ rows }) => {
       if (rows.length !== SEED_PRODUCTS.length) return fail("Return all six products.");
@@ -421,9 +427,12 @@ returns a value: \`upper(name)\` turns 'Green tea' into 'GREEN TEA'. These are
 value of the first one that's true, or the \`ELSE\` value. It's handy for labels
 and buckets.`,
     sql: "Same as SQL's searched CASE expression.",
-    syntax: ["CASE WHEN condition THEN value WHEN … THEN … ELSE value END"],
-    task: "Label each product 'in stock' or 'sold out' (stock of 0) — show its name and the label.",
-    hint: "`CASE WHEN stock > 0 THEN 'in stock' ELSE 'sold out' END AS availability`",
+    syntax: [
+      "SELECT name, CASE WHEN price >= 10 THEN 'premium' ELSE 'standard' END AS tier FROM products",
+      "CASE WHEN condition THEN value WHEN … THEN … ELSE value END   -- the general form",
+    ],
+    task: "For each product, show its name and a label: 'in stock' if its stock is above 0, otherwise 'sold out'.",
+    hint: "Inside `CASE WHEN … THEN … ELSE … END`, test `stock > 0`, and name the result with `AS`.",
     answer:
       "SELECT name, CASE WHEN stock > 0 THEN 'in stock' ELSE 'sold out' END AS availability FROM products",
     setup: ["UPDATE products SET stock = 0 WHERE _id = 'p4'"],
@@ -450,9 +459,13 @@ test each case. In the practice data, only the Espresso blend has a real
 discount, the Chai spices has \`discount: null\`, and the rest have no discount
 field.`,
     sql: "SQL has only NULL; MISSING is unique to document databases.",
-    syntax: ["WHERE details IS MISSING", "WHERE discount IS NULL", "WHERE discount IS NOT MISSING"],
-    task: "Find the product whose discount is NULL (present but empty).",
-    hint: "`WHERE discount IS NULL`",
+    syntax: [
+      "SELECT name, details FROM products WHERE details IS MISSING",
+      "WHERE details IS NOT MISSING",
+      "WHERE field IS NULL",
+    ],
+    task: "Find the product whose `discount` is NULL (the field is there but empty), and show its name.",
+    hint: "MISSING means the field isn't there; NULL means it's there but empty. You want NULL.",
     answer: "SELECT name, discount FROM products WHERE discount IS NULL",
     check: ({ rows }) => expectProducts(rows, ["Chai spices"]),
     success: "`IS MISSING` would have found the other four, which have no discount field at all.",
@@ -464,9 +477,12 @@ field.`,
 yields nothing for products without a discount. \`coalesce(a, b, …)\` returns its
 first argument that has a value, so \`coalesce(discount, 0)\` supplies a default.`,
     sql: "Same as SQL's COALESCE.",
-    syntax: ["coalesce(discount, 0)"],
-    task: "Show every product's name and sale price, `price * (1 - discount)`, treating a missing or null discount as 0.",
-    hint: "`price * (1 - coalesce(discount, 0)) AS sale_price`",
+    syntax: [
+      "coalesce(value, fallback)   -- the first one that isn't NULL or MISSING",
+      "SELECT name, coalesce(details.roast, 'none') AS roast FROM products",
+    ],
+    task: "Show each product's name and its sale price, `price * (1 - discount)`. Treat a missing or NULL discount as 0.",
+    hint: "`coalesce(discount, 0)` is 0 when there's no discount — use it in place of `discount` in the formula.",
     answer:
       "SELECT name, price * (1 - coalesce(discount, 0)) AS sale_price FROM products ORDER BY sale_price",
     check: ({ rows }) => {
@@ -484,12 +500,16 @@ first argument that has a value, so \`coalesce(discount, 0)\` supplies a default
     level: "intermediate",
     title: "Nested objects",
     concept: `Fields can hold objects, which keeps related data together in one document.
+Some products have a \`details\` object holding their \`origin\` and \`roast\`:
+
+  { name: 'Espresso blend', details: { origin: 'Brazil', roast: 'medium' } }
+
 Reach inside with a **dot path**: \`details.origin\`. Dot paths work in projections,
 predicates, sorting, and indexes.`,
     sql: "Like reading a JSON column, but without special JSON functions.",
-    syntax: ["SELECT name, details.origin FROM products WHERE details.roast = 'dark'"],
-    task: "Show the name and origin of the products with a `dark` roast.",
-    hint: "Filter on `details.roast = 'dark'` and select `details.origin`.",
+    syntax: ["SELECT name, details.roast FROM products WHERE details.origin = 'Brazil'"],
+    task: "Show the name and origin of each product whose `details` has a `dark` roast.",
+    hint: "Reach into the nested object with a dot: `details.roast` and `details.origin`.",
     answer: "SELECT name, details.origin FROM products WHERE details.roast = 'dark'",
     check: ({ rows }) => {
       if (rows.length !== 1) return fail("Exactly one product has a dark roast.");
@@ -503,15 +523,15 @@ predicates, sorting, and indexes.`,
     level: "intermediate",
     title: "Arrays",
     concept: `A field can hold an **array** (a list), like \`tags\`. Array functions inspect it:
-\`array_contains(tags, 'organic')\` tests for a value and \`array_length(tags)\` counts
+\`array_contains(tags, 'spicy')\` tests for a value and \`array_length(tags)\` counts
 the elements. \`tags[0]\` reads the first element.`,
     sql: "Similar to PostgreSQL arrays.",
     syntax: [
-      "WHERE array_contains(tags, 'organic')",
+      "WHERE array_contains(tags, 'fair-trade')",
       "SELECT name, tags[0] AS first_tag FROM products WHERE array_length(tags) > 0",
     ],
-    task: "Find the products tagged `organic`.",
-    hint: "`WHERE array_contains(tags, 'organic')`",
+    task: "Find the products tagged `organic`, and show their names.",
+    hint: "`array_contains(array, value)` is true when the array holds that value.",
     answer: "SELECT name, tags FROM products WHERE array_contains(tags, 'organic')",
     check: ({ rows }) => expectProducts(rows, ["Coffee beans", "Green tea", "Chai spices"]),
     success: "Arrays are values too — you can return them, as you just did with `tags`.",
@@ -526,8 +546,8 @@ they combine many documents into one value. \`count(*)\` counts documents,
 into a single row.`,
     sql: "Same aggregate functions as SQL.",
     syntax: ["SELECT count(*) AS products, max(price) AS top_price FROM products"],
-    task: "In one row, show how many products there are and their average price.",
-    hint: "`SELECT count(*) AS products, avg(price) AS avg_price FROM products`",
+    task: "In a single row, show the number of products and their average price.",
+    hint: "`count(*)` counts documents and `avg()` averages a field — both in one SELECT give a single row.",
     answer: "SELECT count(*) AS products, avg(price) AS avg_price FROM products",
     check: ({ rows }) => {
       if (rows.length !== 1) return fail("Aggregates without GROUP BY return a single row.");
@@ -544,9 +564,12 @@ into a single row.`,
 the aggregate functions once **per group**. Every field you select must be either
 grouped or aggregated.`,
     sql: "Same as SQL GROUP BY.",
-    syntax: ["SELECT category, count(*) AS products FROM products GROUP BY category"],
-    task: "Count how many products are in each category.",
-    hint: "`SELECT category, count(*) AS products FROM products GROUP BY category`",
+    syntax: [
+      "SELECT country, count(*) AS suppliers FROM suppliers GROUP BY country",
+      "SELECT category, max(price) AS top_price FROM products GROUP BY category",
+    ],
+    task: "Show each category and how many products it has.",
+    hint: "GROUP BY the field you want one row for, and `count(*)` each group.",
     answer: "SELECT category, count(*) AS products FROM products GROUP BY category",
     check: ({ rows }) => {
       const expected: Record<string, number> = { coffee: 3, tea: 2, accessories: 1 };
@@ -570,10 +593,10 @@ grouped or aggregated.`,
 the aggregates are computed, so it can test them: \`HAVING sum(stock) > 50\`.`,
     sql: "Same as SQL HAVING.",
     syntax: [
-      "SELECT category, sum(stock) AS units FROM products GROUP BY category HAVING sum(stock) > 50",
+      "SELECT category, avg(price) AS avg_price FROM products GROUP BY category HAVING avg(price) > 10",
     ],
-    task: "Show the categories with more than 50 units in stock in total.",
-    hint: "Group by category and add `HAVING sum(stock) > 50`.",
+    task: "Show the categories whose total stock is more than 50 units.",
+    hint: "Total the stock per category with `sum(stock)`; HAVING keeps only the groups you want.",
     answer:
       "SELECT category, sum(stock) AS units FROM products GROUP BY category HAVING sum(stock) > 50",
     setup: ["UPDATE products SET stock = 0 WHERE _id = 'p4'"],
@@ -592,9 +615,9 @@ the aggregates are computed, so it can test them: \`HAVING sum(stock) > 50\`.`,
     concept: `\`SELECT DISTINCT\` removes duplicate result rows, so each combination of the
 selected values appears once. It's a quick way to see which values a field takes.`,
     sql: "Same as SQL DISTINCT.",
-    syntax: ["SELECT DISTINCT category FROM products"],
-    task: "List each category once.",
-    hint: "`SELECT DISTINCT category FROM products`",
+    syntax: ["SELECT DISTINCT supplier_id FROM products"],
+    task: "List each category once, with no duplicates.",
+    hint: "`DISTINCT` goes right after SELECT.",
     answer: "SELECT DISTINCT category FROM products",
     check: ({ rows }) =>
       sameSet(
@@ -617,11 +640,11 @@ matching rows on a condition. An **inner join** returns only the pairs that matc
 give each collection an alias (\`p\`, \`s\`) to say which fields you mean.`,
     sql: "Same as SQL INNER JOIN … ON.",
     syntax: [
-      "SELECT p.name, s.name AS supplier",
-      "FROM products AS p INNER JOIN suppliers AS s ON p.supplier_id = s._id",
+      "SELECT a.field, b.field AS other",
+      "FROM collection_a AS a INNER JOIN collection_b AS b ON a.key = b._id",
     ],
-    task: "Show each product's name with the name of its supplier.",
-    hint: "Join `products AS p` to `suppliers AS s` ON `p.supplier_id = s._id`.",
+    task: "Show each product's name together with the name of its supplier.",
+    hint: "Each product has a `supplier_id`; match it to the supplier's `_id`.",
     answer:
       "SELECT p.name, s.name AS supplier FROM products AS p INNER JOIN suppliers AS s ON p.supplier_id = s._id",
     check: ({ rows }) => {
@@ -644,12 +667,11 @@ matches on the right; the right side's fields are then missing. Filtering for
 that missing side finds orphans — an **anti-join**.`,
     sql: "Same as SQL LEFT JOIN; DQL tests the unmatched side with IS MISSING.",
     syntax: [
-      "SELECT p.name, s.name AS supplier FROM products AS p",
-      "LEFT JOIN suppliers AS s ON p.supplier_id = s._id",
-      "WHERE s._id IS MISSING",
+      "SELECT … FROM a LEFT JOIN b ON a.key = b._id   -- keeps every row of a",
+      "-- rows of a with no match have b's fields MISSING",
     ],
-    task: "Find the products whose supplier doesn't exist.",
-    hint: "LEFT JOIN products to suppliers, then keep rows `WHERE s._id IS MISSING`.",
+    task: "Find the products whose supplier doesn't exist, and show their names.",
+    hint: "LEFT JOIN products to suppliers, then keep the rows where the supplier's `_id` IS MISSING.",
     answer:
       "SELECT p.name FROM products AS p LEFT JOIN suppliers AS s ON p.supplier_id = s._id WHERE s._id IS MISSING",
     check: ({ rows }) => expectProducts(rows, ["Travel mug"]),
@@ -666,10 +688,10 @@ requires all of them.) The \`orders\` collection has three orders.`,
     sql: "Like an EXISTS subquery over a child table, written inline.",
     syntax: [
       "SELECT _id FROM orders WHERE ANY l IN lines SATISFIES l.sku = 'p3' END",
-      "… SATISFIES l.sku = 'p1' AND l.qty >= 2 END   -- both on the same element",
+      "… SATISFIES l.sku = 'p5' AND l.qty > 1 END   -- both on the same element",
     ],
-    task: "Find the orders with a line for product 'p1' with a quantity of exactly 2.",
-    hint: "`WHERE ANY l IN lines SATISFIES l.sku = 'p1' AND l.qty = 2 END`",
+    task: "Find the orders that have a line for product 'p1' with a quantity of exactly 2, and show their `_id`.",
+    hint: "Put both conditions, on `l.sku` and on `l.qty`, inside one SATISFIES with AND.",
     answer: "SELECT _id FROM orders WHERE ANY l IN lines SATISFIES l.sku = 'p1' AND l.qty = 2 END",
     check: ({ rows }) => {
       const ids = rows.map((r) => r._id);
@@ -699,7 +721,7 @@ queries you run often.`,
       "SELECT * FROM system:indexes",
     ],
     task: `Create an index named \`${PRACTICE_INDEX}\` on the \`category\` field of \`products\`.`,
-    hint: `\`CREATE INDEX IF NOT EXISTS ${PRACTICE_INDEX} ON products (category)\``,
+    hint: "`CREATE INDEX IF NOT EXISTS <name> ON <collection> (<field>)`.",
     answer: `CREATE INDEX IF NOT EXISTS ${PRACTICE_INDEX} ON products (category)`,
     setup: [`DROP INDEX IF EXISTS ${PRACTICE_INDEX} ON products`],
     check: async ({ query }) => {
@@ -721,11 +743,11 @@ category with the most expensive first — so a query that sorts the same way ca
 read results straight from the index instead of sorting them.`,
     sql: "Same as a multi-column SQL index with per-column ASC/DESC.",
     syntax: [
-      `CREATE INDEX IF NOT EXISTS ${COMPOSITE_INDEX} ON products (category ASC, price DESC)`,
-      "SELECT name, category, price FROM products ORDER BY category ASC, price DESC",
+      "CREATE INDEX IF NOT EXISTS idx_name ON collection (field_a ASC, field_b DESC)",
+      "SELECT … ORDER BY field_a ASC, field_b DESC   -- matches the index",
     ],
-    task: `Create the index \`${COMPOSITE_INDEX}\` on \`(category ASC, price DESC)\`, then list products by category, most expensive first within each.`,
-    hint: "Two statements: the CREATE INDEX from the syntax above, then a SELECT with `ORDER BY category ASC, price DESC`.",
+    task: `Create the index \`${COMPOSITE_INDEX}\` on \`(category ASC, price DESC)\`. Then list the products sorted by category, with the most expensive first within each category.`,
+    hint: "Two statements: CREATE INDEX on `(category ASC, price DESC)`, then a SELECT whose ORDER BY matches it.",
     answer: "SELECT name, category, price FROM products ORDER BY category ASC, price DESC",
     setup: [`CREATE INDEX IF NOT EXISTS ${COMPOSITE_INDEX} ON products (category ASC, price DESC)`],
     check: async ({ rows, kind, query }) => {
@@ -760,9 +782,9 @@ index to use, in what order to filter, sort, and project. \`EXPLAIN\` shows that
 plan as a tree of **operators** without running the query. Look for \`indexScan\`
 (uses an index) versus \`scan\` (reads every document).`,
     sql: "Like SQL EXPLAIN.",
-    syntax: ["EXPLAIN SELECT name FROM products WHERE category = 'tea'"],
-    task: "EXPLAIN a query that finds the products in the `tea` category, and check that it uses your index.",
-    hint: "Put `EXPLAIN` in front of `SELECT name FROM products WHERE category = 'tea'`.",
+    syntax: ["EXPLAIN SELECT name FROM products WHERE price > 10"],
+    task: "Use EXPLAIN on a query that finds the products in the `tea` category, and check that the plan uses your index.",
+    hint: "Put `EXPLAIN` in front of a SELECT that filters on `category`.",
     answer: "EXPLAIN SELECT name FROM products WHERE category = 'tea'",
     setup: [`CREATE INDEX IF NOT EXISTS ${PRACTICE_INDEX} ON products (category)`],
     check: ({ kind, rows }) => {
@@ -781,9 +803,9 @@ plan as a tree of **operators** without running the query. Look for \`indexScan\
 how many documents went in and out, CPU time, time waiting on storage (\`stor\`), and
 how often it yielded to the scheduler. The slowest operator is the one to optimize.`,
     sql: "Like EXPLAIN ANALYZE in PostgreSQL.",
-    syntax: ["PROFILE SELECT name FROM products WHERE price > 10"],
-    task: "PROFILE a SELECT that finds the products priced over 10.",
-    hint: "`PROFILE SELECT name FROM products WHERE price > 10`",
+    syntax: ["PROFILE SELECT name FROM products WHERE category = 'tea'"],
+    task: "Use PROFILE on a SELECT that finds the products priced over 10.",
+    hint: "Put `PROFILE` in front of a SELECT that filters on `price`.",
     answer: "PROFILE SELECT name FROM products WHERE price > 10",
     check: ({ kind, rows }) => {
       if (kind !== "profile") return fail("Start the statement with `PROFILE`.");
@@ -800,12 +822,15 @@ how often it yielded to the scheduler. The slowest operator is the one to optimi
 of evaluating a WHERE predicate: \`UPDATE products USE IDS 'p1', 'p2' SET …\`,
 \`EVICT FROM products USE IDS 'p7'\`. It's the cheapest way to touch specific
 documents.`,
-    syntax: ["UPDATE products USE IDS 'p3' SET stock = 40", "EVICT FROM products USE IDS 'p7'"],
+    syntax: [
+      "UPDATE products USE IDS 'p3' SET stock = 40",
+      "SELECT name FROM products USE IDS 'p1'",
+    ],
     task: "Evict the Cold brew kit (`_id` 'p7') using `USE IDS`.",
-    hint: "`EVICT FROM products USE IDS 'p7'`",
+    hint: "`EVICT FROM` the collection, then `USE IDS` with the kit's `_id`.",
     answer: "EVICT FROM products USE IDS 'p7'",
     setup: [
-      "INSERT INTO products DOCUMENTS ({'_id': 'p7', 'name': 'Cold brew kit', 'category': 'coffee', 'price': 25}) ON ID CONFLICT DO UPDATE",
+      "INSERT INTO products VALUES ({'_id': 'p7', 'name': 'Cold brew kit', 'category': 'coffee', 'price': 25}) ON ID CONFLICT DO UPDATE",
     ],
     check: async ({ statement, query }) => {
       if (!/\bUSE\s+IDS\b/i.test(statement))
@@ -829,8 +854,8 @@ sync — always empty in this offline CLI).`,
       "SELECT DISTINCT namespace FROM system:system_info",
       "SELECT key, current FROM system:metrics WHERE key LIKE 'ditto.query.%'",
     ],
-    task: "List the storage-engine keys: the DISTINCT `key` values in `system:system_info` whose `namespace` is 'backend_sqlite3'.",
-    hint: "`SELECT DISTINCT key FROM system:system_info WHERE namespace = 'backend_sqlite3'`",
+    task: "List the storage-engine keys: the distinct `key` values in `system:system_info` whose `namespace` is 'backend_sqlite3'.",
+    hint: "Start from `SELECT DISTINCT key FROM system:system_info` and filter on `namespace`.",
     answer: "SELECT DISTINCT key FROM system:system_info WHERE namespace = 'backend_sqlite3'",
     check: ({ rows }) =>
       allValues(rows).includes("wal_current_size_bytes")

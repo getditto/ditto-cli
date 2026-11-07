@@ -11,7 +11,7 @@ import {
   type TutorialContext,
   tutorialSections,
 } from "../../src/tutorial/content.js";
-import { makeLessonEval } from "../../src/tutorial/lesson-eval.js";
+import { looksUnfinished, makeLessonEval } from "../../src/tutorial/lesson-eval.js";
 import {
   firstLessonOf,
   LESSONS,
@@ -19,7 +19,7 @@ import {
   RESET_STATEMENTS,
   SEED_PRODUCTS,
 } from "../../src/tutorial/lessons.js";
-import { highlight, LESSON_HELP, LessonRunner, type Progress } from "../../src/tutorial/runner.js";
+import { highlight, LessonRunner, lessonHelp, type Progress } from "../../src/tutorial/runner.js";
 
 const CTX: TutorialContext = {
   cliVersion: "0.2.0",
@@ -290,12 +290,14 @@ describe("LessonRunner", () => {
     runner.hint();
     expect(out()).toContain("Hint:");
     runner.answer();
-    expect(out()).toContain(`${LESSONS[0]!.answer};`);
+    expect(out()).toContain(LESSONS[0]!.answer);
     executed.length = 0;
     await runner.reset();
     expect(executed.slice(0, RESET_STATEMENTS.length)).toEqual(RESET_STATEMENTS);
     expect(out()).toContain("Practice data restored.");
-    expect(LESSON_HELP).toContain(".level <name>");
+    expect(lessonHelp()).toContain(".level <name>");
+    expect(lessonHelp()).toContain("How the lessons work");
+    expect(lessonHelp()).toContain("optional");
   });
 
   it("announces a new level and finishes after the last lesson", async () => {
@@ -466,44 +468,96 @@ describe("lesson checks reject wrong answers with a reason", () => {
   });
 });
 
-describe("makeLessonEval", () => {
-  it("buffers multi-line input, then submits complete statements in order", async () => {
-    const submitted: string[] = [];
-    const ev = makeLessonEval({ submit: async (s) => (submitted.push(s), true) });
-    const call = (cmd: string) =>
-      new Promise<Error | null>((resolve) => ev.eval(cmd, {}, "repl", (err) => resolve(err)));
+describe("lesson content", () => {
+  const norm = (t: string) =>
+    t
+      .replace(/\s+--.*$/gm, "")
+      .replace(/`/g, "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .toLowerCase();
 
-    expect(await call("SELECT *\n")).toBeInstanceOf(Recoverable);
-    // node:repl re-sends the whole accumulation after a Recoverable
-    expect(await call("SELECT *\nFROM products;\n")).toBeNull();
-    expect(await call("-- just a comment\n")).toBeNull();
-    expect(await call("SELECT 1; SELECT 2;\n")).toBeNull();
-    await ev.drain();
-    expect(submitted).toEqual(["SELECT *\nFROM products", "SELECT 1", "SELECT 2"]);
+  it("syntax examples and hints never give away the answer", () => {
+    for (const [i, l] of LESSONS.entries()) {
+      const answer = norm(l.answer);
+      expect(norm(l.syntax.join(" ")), `lesson ${i + 1} syntax`).not.toContain(answer);
+      for (const s of l.syntax) expect(norm(s), `lesson ${i + 1} syntax`).not.toBe(answer);
+      expect(norm(l.hint), `lesson ${i + 1} hint`).not.toContain(answer);
+    }
+  });
+});
+
+describe("looksUnfinished", () => {
+  it("continues on open quotes/brackets, trailing commas, operators, and keywords", () => {
+    for (const t of [
+      "SELECT name,",
+      "SELECT *",
+      "SELECT * FROM products WHERE",
+      "SELECT * FROM products WHERE price >",
+      "SELECT * FROM products WHERE name = 'Green",
+      "INSERT INTO products VALUES ({'_id': 'x'",
+      "SELECT * FROM products ORDER BY",
+    ]) {
+      expect(looksUnfinished(t), t).toBe(true);
+    }
   });
 
-  it("drops an incomplete tail after complete statements, and reset clears the buffer", async () => {
+  it("runs complete-looking statements, ignoring keywords inside strings and comments", () => {
+    for (const t of [
+      "SELECT * FROM products",
+      "SELECT name FROM products WHERE category = 'where'",
+      "SELECT * FROM products -- where",
+      "SELECT [1, 2] AS xs FROM products",
+      "SELECT COUNT(*) FROM products",
+    ]) {
+      expect(looksUnfinished(t), t).toBe(false);
+    }
+  });
+});
+
+describe("makeLessonEval", () => {
+  const setup = () => {
     const submitted: string[] = [];
-    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
-    const ev = makeLessonEval({ submit: async (s) => (submitted.push(s), true) });
+    const ev = makeLessonEval({
+      submit: async (s) => {
+        submitted.push(s);
+        return true;
+      },
+    });
     const call = (cmd: string) =>
       new Promise<Error | null>((resolve) => ev.eval(cmd, {}, "repl", (err) => resolve(err)));
-    await call("SELECT 1; SELECT\n");
-    await ev.drain();
-    expect(submitted).toEqual(["SELECT 1"]);
-    expect(String(errors.mock.calls[0]?.[0])).toContain("discarding incomplete trailing text");
-    expect(await call("SELECT *\n")).toBeInstanceOf(Recoverable);
-    ev.reset();
-    expect(await call("SELECT 2;\n")).toBeNull();
-    await ev.drain();
-    expect(submitted).toEqual(["SELECT 1", "SELECT 2"]);
+    return { submitted, ev, call };
+  };
 
+  it("runs on Enter without a semicolon; continues only while unfinished", async () => {
+    const { submitted, ev, call } = setup();
+    expect(await call("SELECT * FROM products\n")).toBeNull();
+    expect(await call("SELECT name,\n")).toBeInstanceOf(Recoverable);
+    // node:repl re-sends the whole accumulation after a Recoverable
+    expect(await call("SELECT name,\nprice FROM products\n")).toBeNull();
+    expect(await call("-- just a comment\n")).toBeNull();
+    expect(await call("SELECT 1; SELECT 2;\n")).toBeNull();
+    expect(await call("SELECT 3; SELECT 4\n")).toBeNull();
+    ev.reset();
+    await ev.drain();
+    expect(submitted).toEqual([
+      "SELECT * FROM products",
+      "SELECT name,\nprice FROM products",
+      "SELECT 1",
+      "SELECT 2",
+      "SELECT 3",
+      "SELECT 4",
+    ]);
+  });
+
+  it("reports submit failures", async () => {
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
     const failing = makeLessonEval({
       submit: async () => {
         throw new Error("kaboom");
       },
     });
-    await new Promise((r) => failing.eval("SELECT 1;\n", {}, "repl", r));
+    await new Promise((r) => failing.eval("SELECT 1\n", {}, "repl", r));
     await failing.drain();
     expect(errors.mock.calls.flat().join(" ")).toContain("kaboom");
     errors.mockRestore();

@@ -194,7 +194,7 @@ dittosh dql "SELECT name, price FROM products WHERE category = :category AND pri
       blocks: [
         text("Insert a mug. The conflict clause makes repeating this INSERT safe for the same ID:"),
         sh(`
-dittosh dql "INSERT INTO products DOCUMENTS ({'_id':'p4','name':'Mug','category':'accessories','price':8,'stock':15}) ON ID CONFLICT DO UPDATE"
+dittosh dql "INSERT INTO products VALUES ({'_id':'p4','name':'Mug','category':'accessories','price':8,'stock':15}) ON ID CONFLICT DO UPDATE"
 dittosh dql "SELECT name, stock FROM products WHERE _id = 'p4'"
 `),
         text("Update its stock, then query it again:"),
@@ -492,7 +492,7 @@ with a line for 2 × p1:
 `),
         sh(
           `
-dittosh dql "INSERT INTO orders DOCUMENTS ({'_id':'o1','lines':[{'sku':'p1','qty':2},{'sku':'p2','qty':1}]}), ({'_id':'o2','lines':[{'sku':'p1','qty':1},{'sku':'p3','qty':5}]}) ON ID CONFLICT DO UPDATE"
+dittosh dql "INSERT INTO orders VALUES ({'_id':'o1','lines':[{'sku':'p1','qty':2},{'sku':'p2','qty':1}]}), ({'_id':'o2','lines':[{'sku':'p1','qty':1},{'sku':'p3','qty':5}]}) ON ID CONFLICT DO UPDATE"
 dittosh dql "SELECT _id FROM orders WHERE ANY l IN lines SATISFIES l.sku = 'p1' AND l.qty = 2 END"
 `,
           ['"o1"'],
@@ -506,7 +506,7 @@ removes them. Evict p2, confirm it's gone, then restore it:
           `
 dittosh dql "EVICT FROM products USE IDS 'p2'"
 dittosh dql "SELECT count(*) AS total FROM products"
-dittosh dql "INSERT INTO products DOCUMENTS ({'_id':'p2','name':'Paper filters','category':'coffee','price':5,'stock':100}) ON ID CONFLICT DO UPDATE"
+dittosh dql "INSERT INTO products VALUES ({'_id':'p2','name':'Paper filters','category':'coffee','price':5,'stock':100}) ON ID CONFLICT DO UPDATE"
 `,
           ['"total": 2'],
         ),
@@ -557,7 +557,10 @@ dittosh tutorial --interactive --level intermediate
 Lessons are grouped as **beginner** (queries, filtering, projection, sorting,
 writes), **intermediate** (expressions, functions, \`CASE\`, MISSING vs NULL,
 aggregation, grouping), and **advanced** (joins, \`ANY … SATISFIES\`, indexes, query
-plans, profiling, system collections). Inside the lessons, \`.hint\` nudges you,
+plans, profiling, system collections). The lessons open full screen (add
+\`--plain\` for a simple line-by-line shell). Type a statement and press Enter to run it
+(a trailing \`;\` is optional); a \`|\` prompt means it looks unfinished, so keep
+typing or use \`.break\`. Tab or \`.hint\` nudges you, \`?\` explains the keys,
 \`.answer\` shows a solution, \`.lessons\` lists your progress, and \`.exit\` saves it.
 `),
       ],

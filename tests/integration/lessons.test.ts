@@ -53,6 +53,50 @@ describe.skipIf(!hasDevCredentials)(`integration: tutorial lessons (${NO_CREDENT
     }
   });
 
+  it("every complete syntax example is valid DQL against the practice data", async () => {
+    const runnable = /^(SELECT|INSERT|UPDATE|EVICT|EXPLAIN|PROFILE|CREATE)\b/i;
+    const placeholder = /…|\bcollection(_a|_b)?\b|\bfield(_a|_b)?\b|\bidx_name\b|</;
+    let ran = 0;
+    for (const [i, lesson] of LESSONS.entries()) {
+      for (const line of lesson.syntax) {
+        const statement = line.replace(/\s+--.*$/, "").trim();
+        if (!runnable.test(statement) || placeholder.test(statement)) continue;
+        await runner.resetData();
+        for (const s of lesson.setup ?? []) await session.execute(s);
+        await expect(
+          session.execute(statement),
+          `lesson ${i + 1} example: ${statement}`,
+        ).resolves.toBeDefined();
+        ran++;
+      }
+    }
+    expect(ran).toBeGreaterThan(15);
+    await runner.resetData();
+  });
+
+  it("the data view reads every lesson's collections from the real store", async () => {
+    await runner.resetData();
+    for (const [i] of LESSONS.entries()) {
+      await runner.goto(String(i + 1));
+      const schemas = await runner.schema();
+      expect(schemas.length, `lesson ${i + 1}`).toBeGreaterThan(0);
+      for (const s of schemas) {
+        expect(s.fields.length, `lesson ${i + 1} ${s.collection}`).toBeGreaterThan(0);
+      }
+    }
+    await runner.goto(String(LESSONS.findIndex((l) => l.title === "Joining collections") + 1));
+    const [products, suppliers] = await runner.schema();
+    expect(products?.fields.map((f) => f.path)).toContain("supplier_id");
+    expect(suppliers?.fields.map((f) => f.path)).toContain("country");
+  });
+
+  it("a wrong-case collection name is explained, not just 'no rows'", async () => {
+    await runner.goto("1");
+    output.length = 0;
+    expect(await runner.submit("SELECT * FROM Products")).toBe(false);
+    expect(output.join("\n")).toContain("Collection names are case-sensitive");
+  });
+
   it("wrong answers are rejected with a reason and don't advance", async () => {
     await runner.resetData();
     await runner.goto("3"); // Filtering: coffee products

@@ -45,58 +45,121 @@ tracing bootstrap on **stderr**.
 - [ ] **Renders well** — preview the file in a Markdown viewer (VS Code,
   GitHub). Headings, numbered list, tables, and code fences look right.
 
-## 2. Interactive lessons
+## 2. Interactive lessons (full screen)
 
 Uses its own store (`<config dir>/tutorial-store`) — your default data
-directory is untouched.
+directory is untouched. Use a window of at least 60×20; 80×24 and larger is
+the normal case.
 
-- [ ] **Start** — `dittosh tutorial --interactive`. Expect: "Learn DQL —
-  interactive lessons", the lesson counts per level (Beginner 8 · Intermediate
-  10 · Advanced 9), then Lesson 1 with a concept, an "If you know SQL" note,
-  syntax, and a **Task:**. Prompt is `learn>`.
+- [ ] **Start** — `dittosh tutorial --interactive`. Expect: the terminal
+  switches to a full-screen view (like `less`): a ` Learn DQL ` header with
+  `Lesson 1/27 · Beginner 1/8 · <title>` and a progress bar, a cyan lesson
+  panel (concept, "If you know SQL", syntax, **Task:**), a grey output panel,
+  the `learn>` prompt, and a key bar at the bottom.
 
-- [ ] **Pass a lesson** — type `SELECT * FROM products;`. Expect: a table of 6
-  products, `✓ Correct!` with a takeaway, and Lesson 2 appears.
+- [ ] **Pass a lesson** — type `SELECT * FROM products` and press Enter.
+  Expect: your statement and the products table in the output panel,
+  `✓ Correct! …` on the status line above the prompt, and the header and
+  lesson panel move to Lesson 2. The progress bar counts 1/27.
 
-- [ ] **Wrong answer** — in lesson 2 type `SELECT name FROM products;`.
-  Expect: the table, then `✗ Not quite.` with a specific reason; still lesson 2.
+- [ ] **Wrong answer** — in lesson 2 type `SELECT name FROM products;` (a
+  trailing `;` also works). Expect: `✗ Not quite.` with a specific reason on
+  the status line; still lesson 2.
 
-- [ ] **Query error** — type `SELEKT 1;`. Expect: `Query error: …` and a
-  pointer to `.hint`; still lesson 2.
+- [ ] **Query error** — type `SELEKT 1`. Expect: `Query error: …` on the status
+  line; the next statement clears it.
 
-- [ ] **Multi-line** — type `SELECT name, price` (Enter) then
-  `FROM products;`. Expect: a `|` continuation prompt, then a pass.
+- [ ] **Multi-line** — type `SELECT name,` (Enter) then `price FROM products`
+  (Enter). Expect: the second line gets a `|` prompt (the first ended on a
+  comma), then a pass. Backspace at the start of a `|` line joins it back;
+  Esc clears the input.
 
-- [ ] **Helpers** — `.hint` shows a nudge; `.answer` shows a statement ending
-  in `;`; `.help` lists the lesson commands.
+- [ ] **Line editing** — ←/→, Home/End (Ctrl+A/Ctrl+E), Ctrl+W, Ctrl+U, and
+  ↑/↓ for earlier statements all work. Pasting a multi-line statement puts it
+  on one line.
 
-- [ ] **Navigation** — `.next`, `.back`, `.goto 10`, `.level advanced`
-  (jumps to lesson 19), `.level expert` (usage error), `.goto 99` (usage
-  error).
+- [ ] **Help drawer** — `?` on an empty line (or `.help`) slides a Help panel
+  in from the **right** (Keys, Commands, How it works); the lesson and results
+  stay visible beside it. PgDn/PgUp scroll it (`PgDn more` in its title);
+  typing still goes to the prompt. `?` or Esc closes it (Esc closes the drawer
+  before it clears the input). Below ~88 columns it takes the full width.
 
-- [ ] **Progress list** — `.lessons` groups lessons under Beginner /
-  Intermediate / Advanced, ✓ marks completed ones, and shows `← you are here`.
+- [ ] **Data view** — every lesson card ends with `Collections: … · Ctrl+T
+  shows their fields`. Ctrl+T (or `.schema`) slides a Data panel in from the
+  right listing each collection's fields with type, `n of m` when only some
+  documents have it, and an example value; nested fields as `details.origin`,
+  arrays of objects as `lines[].sku`. Lesson 19 shows `products` and
+  `suppliers`. Insert a document with a new field and it appears. `?` switches
+  to Help; Ctrl+T or Esc closes. The plain shell has `.schema`.
+
+- [ ] **Case sensitivity** — lesson 1 explains that collection and field names
+  are case-sensitive. `SELECT * FROM Products` gets "✗ Not quite. Collection
+  names are case-sensitive: `Products` is a different (empty) collection from
+  `products`." `SELECT Name FROM products` gets the field version.
+
+- [ ] **Outline sidebar** — in a window 90+ columns wide, a Lessons panel on
+  the **left** shows `n/27`, each level with its progress, and the current
+  level's lessons (✓ done, ▸ current). It follows you between levels.
+  Ctrl+B hides/shows it (also in a narrower window, when there's room).
+
+- [ ] **Hints and answers** — Tab (or `.hint`) shows a hint; `.answer` shows a
+  statement.
+
+- [ ] **Scrolling** — run `SELECT * FROM products` in a short window: the
+  table opens at its top, the key bar shows `↓n PgUp/Dn`, PgDn/PgUp scroll.
+
+- [ ] **One action at a time** — after `.answer`, run any statement. Expect:
+  the answer is gone; the output panel shows only that statement and its
+  result. Tab replaces it with the hint but keeps the ✓/✗ line; Ctrl+N clears
+  both.
+
+- [ ] **Lesson picker** — Ctrl+L (or `.lessons`) shows every lesson under
+  Beginner / Intermediate / Advanced, ✓ on completed ones, `new in 5.2` on
+  lessons 21, 23, 26, 27, and the current lesson highlighted. ↑/↓, PgUp/PgDn,
+  Home/End move; Enter opens a lesson; Esc closes without moving.
+
+- [ ] **Navigation** — Ctrl+N / Ctrl+P (or `.next` / `.back`), `.goto 10`,
+  `.level advanced` (lesson 19), `.level expert` and `.goto 99` (usage
+  messages in the output panel).
 
 - [ ] **New-in-5.2 badge** — `.goto 21`. Expect: a highlighted
-  `New in SDK 5.2` line under the concept. Same on lessons 23, 26, and 27.
+  `New in SDK 5.2` line in the lesson panel. Same on lessons 23, 26, and 27.
+
+- [ ] **Short window** — at 80×24, lesson 21's panel shows
+  `… ^O shows the whole lesson` with the **Task:** line still visible below it.
+  Ctrl+O shows the whole lesson; Ctrl+O again restores the output panel.
+
+- [ ] **Wide tables** — at 80 columns, lesson 1's 9-column table is cut off at
+  the panel edge with `…` rather than wrapping.
+
+- [ ] **Resize** — resize the window while a lesson is open. The layout
+  redraws to fit.
 
 - [ ] **EXPLAIN / PROFILE rendering** — `.goto 24`, then `.answer` and type it.
   Expect: the query-plan tree (with `indexScan`), then a pass. Lesson 25
   (PROFILE) shows the Execution Profile view.
 
 - [ ] **Reset** — `.goto 7`, run `UPDATE products SET stock = 999 WHERE
-  _id = 'p1';`, then `.reset`. Expect: "Practice data restored." and the
-  lesson card again; `SELECT stock FROM products WHERE _id = 'p1';` shows 20.
+  _id = 'p1'`, then `.reset`. Expect: "Practice data restored.";
+  `SELECT stock FROM products WHERE _id = 'p1'` shows 20.
 
-- [ ] **Exit and resume** — `.exit`. Expect: `Progress saved (n/27 lessons)`.
-  Start again: "Resuming at lesson …". `--level beginner` starts at lesson 1
-  without the resume note.
+- [ ] **Exit and resume** — Ctrl+D on an empty line (also `.exit`, or Ctrl+C on
+  an empty line). Expect: the terminal returns to what it showed before, then
+  `Progress saved (n/27 lessons)`. Start again: it opens at the saved lesson.
+  `--level beginner` starts at lesson 1.
+
+## 3. Plain shell
+
+- [ ] **`--plain`** — `dittosh tutorial --interactive --plain`. Expect: the
+  line-by-line shell: "Learn DQL — interactive lessons", lesson cards printed
+  in the scrollback, the `learn>` prompt, Enter runs, `.help` explains.
+
+- [ ] **Small window** — in a window smaller than 60×20, `dittosh tutorial
+  --interactive` prints "The window is small, so the lessons use the simple
+  shell …" and starts the plain shell.
 
 - [ ] **Not a terminal** — `echo | dittosh tutorial --interactive`. Expect:
   exit 2, "Interactive lessons need a terminal".
 
 - [ ] **Flags only with --interactive** — `dittosh tutorial --level advanced`
-  exits 2 with "only apply with --interactive".
-
-- [ ] **Narrow terminal** — at ~80 columns, lesson 1's result table fits and
-  ellipsizes long cells.
+  and `dittosh tutorial --plain` exit 2 with "only apply with --interactive".

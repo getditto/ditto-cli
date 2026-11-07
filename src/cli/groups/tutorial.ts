@@ -14,7 +14,7 @@ export interface TutorialDeps {
   now: () => Date;
   platform: string;
   /** Launch the interactive DQL lessons (wired in by the CLI entry). */
-  startInteractive?: (opts: { dataDir?: string; level?: string }) => Promise<void>;
+  startInteractive?: (opts: { dataDir?: string; level?: string; plain?: boolean }) => Promise<void>;
 }
 
 export const defaultTutorialDeps: TutorialDeps = {
@@ -89,12 +89,21 @@ export function registerTutorialCommand(
     .option("-i, --interactive", "learn DQL with guided lessons in an interactive shell", false)
     .option("--level <level>", "with --interactive: start at beginner, intermediate, or advanced")
     .option(
+      "--plain",
+      "with --interactive: a simple line-by-line shell instead of the full-screen view",
+    )
+    .option(
       "-d, --data-dir <path>",
       "with --interactive: practice store (default: a separate store in the config dir)",
     )
     .action(
       async (
-        opts: WriteTutorialOptions & { interactive: boolean; dataDir?: string; level?: string },
+        opts: WriteTutorialOptions & {
+          interactive: boolean;
+          dataDir?: string;
+          level?: string;
+          plain?: boolean;
+        },
       ) => {
         if (opts.interactive) {
           if (!deps.startInteractive) {
@@ -102,11 +111,17 @@ export function registerTutorialCommand(
             process.exitCode = 1;
             return;
           }
-          await deps.startInteractive({ dataDir: opts.dataDir, level: opts.level });
+          await deps.startInteractive({
+            dataDir: opts.dataDir,
+            level: opts.level,
+            plain: opts.plain,
+          });
           return;
         }
-        if (opts.level || opts.dataDir) {
-          console.error(chalk.red("--level and --data-dir only apply with --interactive"));
+        if (opts.level || opts.dataDir || opts.plain) {
+          console.error(
+            chalk.red("--level, --data-dir, and --plain only apply with --interactive"),
+          );
           process.exitCode = 2;
           return;
         }

@@ -60,9 +60,11 @@ describe("e2e: dittosh tutorial (Markdown generator)", () => {
     const both = await cli(["tutorial", "--stdout", "--out", "x.md"]);
     expect(both.exitCode).toBe(2);
 
-    const stray = await cli(["tutorial", "--level", "advanced"]);
-    expect(stray.exitCode).toBe(2);
-    expect(stray.stderr).toContain("only apply with --interactive");
+    for (const flag of [["--level", "advanced"], ["--plain"]]) {
+      const stray = await cli(["tutorial", ...flag]);
+      expect(stray.exitCode).toBe(2);
+      expect(stray.stderr).toContain("only apply with --interactive");
+    }
 
     const notty = await cli(["tutorial", "--interactive"]);
     expect(notty.exitCode).toBe(2);
@@ -75,10 +77,10 @@ describe("e2e: dittosh tutorial (Markdown generator)", () => {
  * bash process — exactly as a reader would — with `dittosh` pointing at this
  * checkout. Catches tutorial commands that drift out of date.
  */
-describe.skipIf(!hasDevCredentials)(`e2e: tutorial commands run as written (${NO_CREDENTIALS})`, () => {
-  it(
-    "every runnable block succeeds and shows its expected output",
-    async () => {
+describe.skipIf(!hasDevCredentials)(
+  `e2e: tutorial commands run as written (${NO_CREDENTIALS})`,
+  () => {
+    it("every runnable block succeeds and shows its expected output", async () => {
       const blocks = tutorialSections(CTX).flatMap((s, si) =>
         s.blocks.flatMap((b, bi) =>
           b.kind === "code" && b.run ? [{ id: `${si + 1}.${bi}`, title: s.title, ...b }] : [],
@@ -118,7 +120,6 @@ describe.skipIf(!hasDevCredentials)(`e2e: tutorial commands run as written (${NO
       } finally {
         rmrf(tmp);
       }
-    },
-    300_000,
-  );
-});
+    }, 300_000);
+  },
+);

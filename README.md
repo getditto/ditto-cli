@@ -177,13 +177,14 @@ Agent targets: Claude Code (`~/.claude/skills` or `.claude/skills`), OpenCode (`
 dittosh tutorial                       # write ./dittosh-tutorial.md, a hands-on walkthrough of the CLI
 dittosh tutorial -o ~/t.md --force     # choose the file / overwrite
 dittosh tutorial --stdout              # print the Markdown instead
-dittosh tutorial --interactive         # guided DQL lessons in a learn> shell
+dittosh tutorial --interactive         # guided DQL lessons, full screen
+dittosh tutorial --interactive --plain # the same lessons in a line-by-line shell
 dittosh tutorial --interactive --level advanced   # start at beginner | intermediate | advanced
 ```
 
 The Markdown tutorial is tailored to this install (CLI and SDK version, Homebrew or npm upgrade commands, platform) and covers importing, querying, exporting, the interactive shell and `.metrics`, sample datasets, `--explain`/`--profile`/`--advise`, joins, what's new in DQL for SDK 5.2, and agent skills. Every runnable command in it is exercised by the e2e suite.
 
-The interactive lessons teach DQL concepts — documents and collections, projection, predicates, boolean logic, sorting, writes, expressions and functions, `CASE`, MISSING vs NULL, aggregation and grouping, joins, `ANY … SATISFIES`, indexes, `EXPLAIN`, `PROFILE`, and system collections — in 27 lessons across beginner, intermediate, and advanced levels. Each lesson explains the idea (with an "if you know SQL" note), shows the syntax, sets a task, and checks your answer. They run in a separate practice store (`<config dir>/tutorial-store`) and save your progress; inside, use `.hint`, `.answer`, `.next`/`.back`, `.lessons`, `.level <name>`, `.goto <n>`, `.reset`, and `.exit`.
+The interactive lessons teach DQL concepts — documents and collections, projection, predicates, boolean logic, sorting, writes, expressions and functions, `CASE`, MISSING vs NULL, aggregation and grouping, joins, `ANY … SATISFIES`, indexes, `EXPLAIN`, `PROFILE`, and system collections — in 27 lessons across beginner, intermediate, and advanced levels. Each lesson explains the idea (with an "if you know SQL" note), shows the syntax, sets a task, and checks your answer. They run in a separate practice store (`<config dir>/tutorial-store`) and save your progress. The lessons open full screen: the lesson stays in a panel at the top, results scroll below it, the latest ✓/✗ verdict sits above the prompt, a sidebar on the left outlines the lessons and your progress (Ctrl+B toggles it), Ctrl+T (or `.schema`) shows the fields of the collections each lesson uses, and `?` slides a help panel in from the right. Press Enter to run a statement (`;` is optional); Tab hints, Ctrl+N/Ctrl+P move between lessons, Ctrl+L picks a lesson from a list, PgUp/PgDn scroll, and Ctrl+D quits. The dot-commands (`.hint`, `.answer`, `.next`/`.back`, `.lessons`, `.level <name>`, `.goto <n>`, `.reset`, `.exit`) work too. `--plain`, or a window smaller than 60×20, uses a simple line-by-line shell instead.
 
 ### Planned for later milestones
 

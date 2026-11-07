@@ -41,12 +41,25 @@ export default defineConfig({
     ].join("\n"),
   },
   // Bundle all JS deps; only the Ditto SDK stays external (native .node binaries).
-  noExternal: ["commander", "chalk", "env-paths", "tar", "@inquirer/prompts"],
-  external: ["@dittolive/ditto"],
+  noExternal: [
+    "commander",
+    "chalk",
+    "env-paths",
+    "tar",
+    "@inquirer/prompts",
+    "string-width",
+    "wrap-ansi",
+    "ink",
+    "react",
+  ],
+  // react-devtools-core: Ink only imports it when DEV=true; it isn't installed.
+  external: ["@dittolive/ditto", "react-devtools-core"],
   define: {
     __CLI_VERSION__: JSON.stringify(pkg.version),
     __DITTO_SDK_VERSION__: JSON.stringify(sdkPkg.version),
     RELEASE: JSON.stringify(release ? "true" : "false"),
+    // React/Ink production builds: smaller and faster; dev-only code is dropped.
+    "process.env.NODE_ENV": JSON.stringify("production"),
   },
   esbuildPlugins: release
     ? [
