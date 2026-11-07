@@ -723,13 +723,18 @@ queries you run often.`,
     task: `Create an index named \`${PRACTICE_INDEX}\` on the \`category\` field of \`products\`.`,
     hint: "`CREATE INDEX IF NOT EXISTS <name> ON <collection> (<field>)`.",
     answer: `CREATE INDEX IF NOT EXISTS ${PRACTICE_INDEX} ON products (category)`,
-    setup: [`DROP INDEX IF EXISTS ${PRACTICE_INDEX} ON products`],
+    setup: [
+      `DROP INDEX IF EXISTS ${PRACTICE_INDEX} ON products`,
+      `DROP INDEX IF EXISTS ${COMPOSITE_INDEX} ON products`,
+    ],
     check: async ({ query }) => {
       const rows = await query("SELECT * FROM system:indexes");
-      const found = rows.some(
-        (r) => r.collection === "products" && JSON.stringify(r.fields ?? "").includes('"category"'),
-      );
-      return found ? pass : fail("No index on `products.category` yet.");
+      const index = rows.find((r) => String(r._id).endsWith(PRACTICE_INDEX));
+      if (!index) return fail(`No index named \`${PRACTICE_INDEX}\` yet.`);
+      return index.collection === "products" &&
+        JSON.stringify(index.fields ?? "").includes('"category"')
+        ? pass
+        : fail(`\`${PRACTICE_INDEX}\` exists, but it should be on \`products (category)\`.`);
     },
     success:
       "`system:indexes` is a virtual collection: you query the database's own metadata with DQL.",

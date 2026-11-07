@@ -14,6 +14,7 @@ import {
   emptyEditor,
   isEditorEmpty,
   submit,
+  viewport,
 } from "../../src/tutorial/ui/editor.js";
 import { drawerWidth, helpLines } from "../../src/tutorial/ui/help.js";
 import {
@@ -58,8 +59,24 @@ describe("lesson screen editor", () => {
     expect(edit(s, { type: "backspace" })).toBe(s); // nothing to join
   });
 
+  it("viewport scrolls long lines so the cursor stays in view", () => {
+    expect(viewport("short", 2, 20)).toEqual({ text: "short", cursorCol: 2 });
+    const line = "abcdefghijklmnopqrstuvwxyz";
+    const end = viewport(line, line.length, 10);
+    expect(end.text.startsWith("…")).toBe(true);
+    // 8 characters, then the cursor in the 9th column.
+    expect(end.text.length).toBe(8);
+    expect(end.cursorCol).toBe(8);
+    const start = viewport(line, 0, 10);
+    expect(start).toEqual({ text: "abcdefgh…", cursorCol: 0 });
+    const mid = viewport(line, 13, 10);
+    expect(mid.text.startsWith("…") && mid.text.endsWith("…")).toBe(true);
+    expect(mid.text[mid.cursorCol]).toBe(line[13]);
+  });
+
   it("pasted newlines and tabs become spaces", () => {
     expect(type(emptyEditor(), "SELECT *\nFROM\tproducts").line).toBe("SELECT * FROM  products");
+    expect(type(emptyEditor(), "SELECT 1\x04\x1b").line).toBe("SELECT 1");
   });
 
   it("Enter: statement, continuation, command, or nothing", () => {
@@ -232,6 +249,24 @@ describe("lesson screen store and provider", () => {
     expect(store.width()).toBe(50);
     store.setWidth(70);
     expect(store.width()).toBe(70);
+  });
+
+  it("track/idle: idle waits for every tracked piece of work, failures included", async () => {
+    const store = createUiStore();
+    await store.idle(); // nothing tracked
+    let done = 0;
+    let release: () => void = () => {};
+    store.track(
+      new Promise<void>((r) => {
+        release = r;
+      }).then(() => done++),
+    );
+    store.track(Promise.reject(new Error("ignored")));
+    const idle = store.idle().then(() => done * 10);
+    await new Promise((r) => setTimeout(r, 5));
+    expect(done).toBe(0);
+    release();
+    expect(await idle).toBe(10);
   });
 
   it("useTutorial outside the provider throws", async () => {
@@ -436,6 +471,57 @@ describe("LessonScreen", () => {
     expect(screen()).not.toContain("Hint:");
     expect(store.snapshot().status).toBeNull();
     expect(store.snapshot().log).toHaveLength(1); // just the lesson divider
+  });
+
+  it("quitting while a statement runs: the work is tracked so the caller can wait", async () => {
+    const { press, store, app, runner } = await mountScreen();
+    await press("SELECT * FROM products\r", 0);
+    await press("\x04", 0); // Ctrl+D right away
+    await app.waitUntilExit();
+    await store.idle();
+    expect(runner.current).toBe(1); // the check and lesson change completed
+  });
+
+  it("long input scrolls sideways; many continuation lines collapse", async () => {
+    const { screen, press } = await mountScreen(24, 70);
+    await press(`SELECT ${"name, ".repeat(20)}price FROM products`);
+    let s = screen();
+    expect(s).toMatch(/learn> …[^\n]*price FROM products/);
+    await press("\x1b"); // clear
+    for (let i = 0; i < 8; i++) {
+      await press(`f${i},`);
+      await press("\r");
+    }
+    s = screen();
+    expect(s).toMatch(/… \d+ earlier lines/);
+    expect(s).toContain("f7,");
+    expect(s).not.toContain("f0,");
+    expect(s).toContain("Task:"); // the lesson still has room
+  });
+
+  it("a chunk with several lines keeps all of them", async () => {
+    const { screen, press, runner } = await mountScreen();
+    await press("SELECT *\rFROM products\rSELECT 1", 80);
+    expect(runner.current).toBe(1); // "SELECT *" + "FROM products" ran as one statement
+    expect(screen()).toContain("learn> SELECT 1"); // the rest waits in the editor
+  });
+
+  it("PgUp stops at the top, so PgDn responds straight away", async () => {
+    const { screen, press } = await mountScreen(24);
+    await press("SELECT * FROM products\r", 80);
+    for (let i = 0; i < 6; i++) await press("\x1b[6~", 5); // to the bottom
+    for (let i = 0; i < 10; i++) await press("\x1b[5~", 5); // far past the top
+    const atTop = screen();
+    await press("\x1b[6~");
+    expect(screen()).not.toBe(atTop);
+  });
+
+  it("a window shrunk below the minimum shows a placeholder", async () => {
+    const { screen } = await mountScreen(12, 50);
+    const s = screen();
+    expect(s).toContain("the window is too small");
+    expect(s).toContain("now 50×12");
+    expect(s).not.toContain("Task:");
   });
 
   it("Ctrl+N / Ctrl+P move between lessons", async () => {

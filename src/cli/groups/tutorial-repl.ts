@@ -7,6 +7,11 @@ import type { DittoSession } from "../../ditto/session.js";
 import { makeLessonEval } from "../../tutorial/lesson-eval.js";
 import { LEVELS, type Level } from "../../tutorial/lessons.js";
 import {
+  checkPracticeStore,
+  markPracticeStore,
+  practiceStoreDir,
+} from "../../tutorial/practice-store.js";
+import {
   LessonRunner,
   type LessonRunnerOptions,
   lessonHelp,
@@ -58,8 +63,18 @@ export async function startTutorialShell(
     );
   }
 
-  const session = await openSession({ dataDir: opts.dataDir ?? tutorialDataDir() });
+  // The lessons reset their store's data; never let -d aim that at real data.
+  const dataDir = practiceStoreDir(opts.dataDir, tutorialDataDir());
+  const check = checkPracticeStore(dataDir, tutorialDataDir());
+  if (!check.ok) {
+    console.error(chalk.red(check.reason));
+    process.exitCode = 2;
+    return;
+  }
+
+  const session = await openSession({ dataDir });
   if (!session) return;
+  markPracticeStore(dataDir);
   try {
     const saved = {
       progress: readProgress(),
@@ -75,7 +90,7 @@ export async function startTutorialShell(
     } else {
       runner = await runPlainShell(session, saved, level);
     }
-    console.log(
+    console.error(
       chalk.dim(
         `Progress saved (${runner.completedCount}/${runner.lessons.length} lessons). Run dittosh tutorial --interactive to continue.`,
       ),
@@ -114,15 +129,13 @@ async function runPlainShell(
   const prompt = () => {
     if (!isClosed()) server.displayPrompt();
   };
+  // Actions queue behind any statement still running (see lesson-eval), and
+  // drain() below waits for them before the session closes.
   const command = (name: string, help: string, action: (arg?: string) => unknown) => {
     server.defineCommand(name, {
       help,
       async action(arg?: string) {
-        try {
-          await action(arg);
-        } catch (err) {
-          console.error(chalk.red(`Error: ${(err as Error).message}`));
-        }
+        await evaluator.enqueue(() => action(arg));
         prompt();
       },
     });

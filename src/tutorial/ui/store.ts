@@ -25,6 +25,10 @@ export interface UiStore {
   /** Output panel width, so the runner fits result tables to it. */
   width: () => number;
   setWidth: (width: number) => void;
+  /** Note work in progress (a statement, a lesson change, a data-view read). */
+  track: (work: Promise<unknown>) => void;
+  /** Resolves once all tracked work has settled — wait for it before closing the store. */
+  idle: () => Promise<void>;
 }
 
 export function createUiStore(opts: { width?: number; maxEntries?: number } = {}): UiStore {
@@ -32,6 +36,7 @@ export function createUiStore(opts: { width?: number; maxEntries?: number } = {}
   let width = opts.width ?? 76;
   let snap: UiSnapshot = { log: [], lessonVersion: 0, printed: 0, status: null };
   const subs = new Set<() => void>();
+  const pending = new Set<Promise<unknown>>();
   const emit = () => {
     for (const cb of subs) cb();
   };
@@ -61,6 +66,17 @@ export function createUiStore(opts: { width?: number; maxEntries?: number } = {}
       };
     },
     snapshot: () => snap,
+    track(work) {
+      const settled = work.then(
+        () => {},
+        () => {},
+      );
+      pending.add(settled);
+      void settled.then(() => pending.delete(settled));
+    },
+    async idle() {
+      while (pending.size > 0) await Promise.all([...pending]);
+    },
     width: () => width,
     setWidth(w) {
       width = w;

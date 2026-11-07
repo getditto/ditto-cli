@@ -11,7 +11,7 @@ import {
   type TutorialContext,
   tutorialSections,
 } from "../../src/tutorial/content.js";
-import { looksUnfinished, makeLessonEval } from "../../src/tutorial/lesson-eval.js";
+import { looksUnfinished, makeLessonEval, submitAll } from "../../src/tutorial/lesson-eval.js";
 import {
   firstLessonOf,
   LESSONS,
@@ -460,7 +460,25 @@ describe("lesson checks reject wrong answers with a reason", () => {
     expect((await composite.check({ ...ctx([], "ddl"), query: q(idx) })).pass).toBe(false);
     expect((await composite.check({ ...ctx([{ x: 1 }]), query: q(idx) })).pass).toBe(false);
     expect((await composite.check({ ...ctx(products()), query: q(idx) })).pass).toBe(false);
-    expect((await byTitle("Indexes").check({ ...ctx([]), query: q(idx) })).pass).toBe(true);
+    // The composite index doesn't count: the task names idx_products_category.
+    expect((await byTitle("Indexes").check({ ...ctx([]), query: q(idx) })).pass).toBe(false);
+    const own = [
+      {
+        _id: "products.idx_products_category",
+        collection: "products",
+        fields: [{ key: ["category"] }],
+      },
+    ];
+    expect((await byTitle("Indexes").check({ ...ctx([]), query: q(own) })).pass).toBe(true);
+    const wrong = [
+      {
+        _id: "products.idx_products_category",
+        collection: "products",
+        fields: [{ key: ["price"] }],
+      },
+    ];
+    const r = await byTitle("Indexes").check({ ...ctx([]), query: q(wrong) });
+    expect(r.pass).toBe(false);
     expect(
       (await byTitle("Reading query plans").check(ctx([{ plan: "scan" }], "explain"))).pass,
     ).toBe(false);
@@ -515,13 +533,60 @@ describe("looksUnfinished", () => {
   });
 });
 
+describe("submitAll", () => {
+  it("stops once a statement passes, and reports how many it skipped", async () => {
+    const submitted: string[] = [];
+    const runner = {
+      submit: async (s: string) => {
+        submitted.push(s);
+        return s === "PASS";
+      },
+    };
+    const skipped: number[] = [];
+    expect(await submitAll(runner, ["a", "PASS", "b", "c"], (n) => skipped.push(n))).toBe(2);
+    expect(submitted).toEqual(["a", "PASS"]);
+    expect(skipped).toEqual([2]);
+    expect(await submitAll(runner, ["x", "PASS"], (n) => skipped.push(n))).toBe(0);
+    expect(await submitAll(runner, ["x"])).toBe(0);
+    expect(skipped).toEqual([2]);
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    await submitAll(runner, ["PASS", "y"]);
+    expect(String(errors.mock.calls[0]?.[0])).toContain("Skipped 1 more statement");
+    errors.mockRestore();
+  });
+
+  it("queued commands run after the statement in flight", async () => {
+    const order: string[] = [];
+    let release: () => void = () => {};
+    const ev = makeLessonEval({
+      submit: async () => {
+        await new Promise<void>((r) => {
+          release = r;
+        });
+        order.push("submit");
+        return false;
+      },
+    });
+    ev.eval("SELECT 1\n", {}, "repl", () => {});
+    const cmd = ev.enqueue(() => order.push("command"));
+    await new Promise((r) => setTimeout(r, 10));
+    expect(order).toEqual([]);
+    release();
+    await cmd;
+    expect(order).toEqual(["submit", "command"]);
+    await ev.enqueue(() => {
+      throw new Error("boom");
+    });
+  });
+});
+
 describe("makeLessonEval", () => {
   const setup = () => {
     const submitted: string[] = [];
     const ev = makeLessonEval({
       submit: async (s) => {
         submitted.push(s);
-        return true;
+        return false;
       },
     });
     const call = (cmd: string) =>

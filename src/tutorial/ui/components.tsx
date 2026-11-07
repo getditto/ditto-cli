@@ -4,7 +4,6 @@ import { useMemo } from "react";
 import stringWidth from "string-width";
 import { LEVELS, type Level } from "../lessons.js";
 import { useTutorial } from "./context.js";
-import type { EditorState } from "./editor.js";
 import { clip, listWindow, progressBar } from "./layout.js";
 
 export const PROMPT = "learn> ";
@@ -210,21 +209,42 @@ export function StatusLine({ lines }: { lines: readonly string[] }) {
   );
 }
 
-/** The prompt line, plus earlier lines of an unfinished statement. */
-export function InputLine({ editor, busy }: { editor: EditorState; busy: boolean }) {
-  const empty = editor.done.length === 0 && editor.line === "";
+/** The prompt line, plus the last few lines of an unfinished statement. */
+export function InputLine({
+  done,
+  hidden,
+  line,
+  empty,
+  busy,
+}: {
+  /** Earlier lines to show (already capped). */
+  done: readonly string[];
+  /** Earlier lines not shown. */
+  hidden: number;
+  /** The current line, already scrolled to keep the cursor in view. */
+  line: string;
+  empty: boolean;
+  busy: boolean;
+}) {
+  const continuing = done.length > 0 || hidden > 0;
   return (
     <>
-      {editor.done.map((l, i) => (
+      {hidden > 0 && (
+        <Text wrap="truncate-end">
+          {chalk.cyan(PROMPT)}
+          {chalk.dim(`… ${hidden} earlier line${hidden === 1 ? "" : "s"}`)}
+        </Text>
+      )}
+      {done.map((l, i) => (
         // biome-ignore lint/suspicious/noArrayIndexKey: continuation lines are positional
         <Text key={i} wrap="truncate-end">
-          {i === 0 ? chalk.cyan(PROMPT) : chalk.dim(CONTINUE)}
+          {i === 0 && hidden === 0 ? chalk.cyan(PROMPT) : chalk.dim(CONTINUE)}
           {l}
         </Text>
       ))}
       <Text wrap="truncate-end">
-        {editor.done.length > 0 ? chalk.dim(CONTINUE) : chalk.cyan(PROMPT)}
-        {busy && empty ? chalk.yellow("running…") : editor.line}
+        {continuing ? chalk.dim(CONTINUE) : chalk.cyan(PROMPT)}
+        {busy && empty ? chalk.yellow("running…") : line}
       </Text>
     </>
   );

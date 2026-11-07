@@ -97,6 +97,33 @@ describe.skipIf(!hasDevCredentials)(`integration: tutorial lessons (${NO_CREDENT
     expect(output.join("\n")).toContain("Collection names are case-sensitive");
   });
 
+  it("skipping a lesson can't leave data behind that breaks a later answer", async () => {
+    const at = (title: string) => LESSONS.findIndex((l) => l.title === title);
+    // Insert p7, then skip the lesson that evicts it, plus a stray write.
+    await runner.goto(String(at("Inserting documents") + 1));
+    expect(await runner.submit(LESSONS[at("Inserting documents")]!.answer)).toBe(true);
+    await session.execute(
+      "INSERT INTO products VALUES ({'_id': 'p9', 'name': 'Kettle', 'price': 30})",
+    );
+    for (const title of ["Expressions and functions", "Aggregate functions", "Outer joins"]) {
+      await runner.goto(String(at(title) + 1));
+      output.length = 0;
+      const ok = await runner.submit(LESSONS[at(title)]!.answer);
+      expect(ok, `${title}:\n${output.join("\n")}`).toBe(true);
+    }
+  });
+
+  it("a command while a statement is being checked can't mark the wrong lesson", async () => {
+    const fresh = new LessonRunner(session, { io: { print: () => {}, width: () => 100 } });
+    await fresh.start();
+    const submitted = fresh.submit(LESSONS[0]!.answer);
+    const moved = fresh.goto("5"); // concurrently, as a plain-shell command could
+    await Promise.all([submitted, moved]);
+    expect(fresh.isCompleted(0)).toBe(true);
+    expect(fresh.isCompleted(4)).toBe(false);
+    expect(fresh.current).toBe(4); // the jump wins; no extra advance
+  });
+
   it("wrong answers are rejected with a reason and don't advance", async () => {
     await runner.resetData();
     await runner.goto("3"); // Filtering: coffee products

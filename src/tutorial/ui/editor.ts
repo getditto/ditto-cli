@@ -54,7 +54,13 @@ export function edit(s: EditorState, a: EditAction): EditorState {
   switch (a.type) {
     case "insert": {
       // Pasted newlines become spaces: the statement stays on the current line.
-      const text = a.text.replace(/\r\n?|\n/g, " ").replace(/\t/g, "  ");
+      // Pasted newlines become spaces; other control characters (a stray
+      // Ctrl+D merged into a chunk of text) are dropped.
+      const text = a.text
+        .replace(/\r\n?|\n/g, " ")
+        .replace(/\t/g, "  ")
+        // biome-ignore lint/suspicious/noControlCharactersInRegex: removing them is the point
+        .replace(/[\x00-\x1f\x7f]/g, "");
       return setLine(s, line.slice(0, cursor) + text + line.slice(cursor), cursor + text.length);
     }
     case "left":
@@ -133,4 +139,25 @@ export function submit(s: EditorState): SubmitResult {
     return { kind: "continue", state: { ...s, done: [...s.done, s.line], line: "", cursor: 0 } };
   }
   return { kind: "statement", text, state: emptyEditor(remember(s.history, text)) };
+}
+
+/**
+ * The part of `line` to draw in `width` columns so the cursor stays in view:
+ * long lines scroll sideways, with "…" where text is cut off.
+ */
+export function viewport(
+  line: string,
+  cursor: number,
+  width: number,
+): { text: string; cursorCol: number } {
+  const room = Math.max(2, width - 1); // the last column holds the cursor
+  if (line.length <= room) return { text: line, cursorCol: cursor };
+  // Mid-line, keep one character visible right of the cursor (the "…" would
+  // otherwise sit under it); at the end, the cursor takes the last column.
+  const after = cursor < line.length ? 2 : 1;
+  const start = Math.max(0, Math.min(cursor - room + after, line.length - room + 1));
+  let text = line.slice(start, start + room);
+  if (start > 0) text = `…${text.slice(1)}`;
+  if (start + room < line.length) text = `${text.slice(0, -1)}…`;
+  return { text, cursorCol: cursor - start };
 }

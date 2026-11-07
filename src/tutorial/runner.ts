@@ -130,9 +130,8 @@ export class LessonRunner {
     for (const s of RESET_STATEMENTS) await this.session.execute(s);
   }
 
-  /** Welcome banner + data reset + the current lesson. */
+  /** Welcome banner + the current lesson (show() restores the practice data). */
   async start(opts: { level?: Level } = {}): Promise<void> {
-    await this.resetData();
     if (opts.level) this.index = firstLessonOf(opts.level, this.lessons);
     if (this.io.onLesson) {
       await this.show();
@@ -155,10 +154,15 @@ export class LessonRunner {
     await this.show();
   }
 
-  /** Run the lesson's setup and print its card. */
+  /**
+   * Restore the practice data, run the lesson's setup, and print its card.
+   * Every lesson starts from the same data, so writes from earlier lessons (or
+   * a skipped one) can't make a correct answer fail.
+   */
   async show(): Promise<void> {
     const lesson = this.lessons[this.index];
     if (!lesson) return;
+    await this.resetData();
     for (const s of lesson.setup ?? []) await this.session.execute(s);
     if (this.io.onLesson) {
       this.io.onLesson();
@@ -259,7 +263,10 @@ export class LessonRunner {
 
   /** Run a submitted statement, show its result, and check it against the lesson. */
   async submit(statement: string): Promise<boolean> {
-    const lesson = this.lessons[this.index];
+    // Captured up front: a command run while this is awaiting (.next, .goto)
+    // must not change which lesson gets marked complete.
+    const index = this.index;
+    const lesson = this.lessons[index];
     let rows: Record<string, unknown>[];
     try {
       rows = await this.rows(statement);
@@ -285,9 +292,10 @@ export class LessonRunner {
       this.verdict(`${chalk.yellow("✗ Not quite.")} ${highlight(reason)}`);
       return false;
     }
-    this.completed.add(this.index);
+    this.completed.add(index);
     this.verdict(`${chalk.green.bold("✓ Correct!")} ${highlight(lesson.success)}`);
-    await this.advance();
+    if (this.index === index) await this.advance();
+    else this.persist();
     return true;
   }
 
@@ -418,7 +426,6 @@ export class LessonRunner {
   }
 
   async reset(): Promise<void> {
-    await this.resetData();
     this.io.print(chalk.dim("Practice data restored."));
     await this.show();
   }

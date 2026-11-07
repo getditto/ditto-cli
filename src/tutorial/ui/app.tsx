@@ -1,5 +1,15 @@
 import chalk from "chalk";
-import { Box, type Key, render, useApp, useCursor, useInput, usePaste, useWindowSize } from "ink";
+import {
+  Box,
+  type Key,
+  render,
+  Text,
+  useApp,
+  useCursor,
+  useInput,
+  usePaste,
+  useWindowSize,
+} from "ink";
 import { useEffect, useMemo, useRef, useState } from "react";
 import stringWidth from "string-width";
 import { splitInput } from "../lesson-eval.js";
@@ -27,6 +37,7 @@ import {
   emptyEditor,
   isEditorEmpty,
   submit,
+  viewport,
 } from "./editor.js";
 import { drawerWidth, helpLines } from "./help.js";
 import { clip, fitCard, scrollWindow, wrapLines } from "./layout.js";
@@ -34,6 +45,8 @@ import { MIN_COLUMNS, MIN_ROWS } from "./limits.js";
 import { OUTLINE_MIN_SCREEN, outlineLines, outlineWidth } from "./outline.js";
 import { createUiStore, type UiStore } from "./store.js";
 
+/** Continuation lines shown above the prompt; earlier ones collapse into "…". */
+const MAX_CONTINUATION_ROWS = 4;
 /** Below the card, the output panel keeps at least this many rows. */
 const MIN_OUTPUT_ROWS = 5;
 /** Narrowest lesson column beside the help drawer. */
@@ -87,6 +100,9 @@ export function LessonScreen() {
   const [outlinePref, setOutlinePref] = useState<boolean | null>(null);
 
   // ── layout ──────────────────────────────────────────────────────────────
+  // Below the minimum (the window shrank after start) a placeholder is drawn
+  // instead; these clamps only keep the layout maths sane meanwhile.
+  const tooSmall = columns < MIN_COLUMNS || rows < MIN_ROWS;
   const width = Math.max(MIN_COLUMNS, columns);
   const height = Math.max(MIN_ROWS, rows);
   // Left: the lesson outline (when there's room). Right: the help drawer,
@@ -112,7 +128,12 @@ export function LessonScreen() {
     };
   }, [runner, inner, lessonVersion]);
   const cardHeight = card.body.length + card.task.length;
-  const inputRows = editor.done.length + 1;
+  // A long multi-line statement shows only its last few lines, so the
+  // lesson and results always keep their space.
+  const maxDone = Math.max(0, Math.min(MAX_CONTINUATION_ROWS, height - 16));
+  const doneShown = maxDone === 0 ? [] : editor.done.slice(-maxDone);
+  const doneHidden = editor.done.length - doneShown.length;
+  const inputRows = doneShown.length + (doneHidden > 0 ? 1 : 0) + 1;
   const statusLines = useMemo(() => {
     if (!status) return [];
     const rows = wrapLines([status], width - 2);
@@ -156,8 +177,9 @@ export function LessonScreen() {
   useEffect(() => {
     if (panel !== "data") return;
     let live = true;
-    runner
-      .schema()
+    const read = runner.schema();
+    store.track(read);
+    read
       .then((s) => {
         if (!live) return;
         setSchemas(s);
@@ -202,14 +224,22 @@ export function LessonScreen() {
   const page = Math.max(1, outputRows - 1);
 
   // ── actions ─────────────────────────────────────────────────────────────
+  // busyRef answers "is something running?" synchronously (state lags a render).
+  const busyRef = useRef(false);
   const run = (task: () => unknown) => {
+    busyRef.current = true;
     setBusy(true);
-    Promise.resolve()
+    const work = Promise.resolve()
       .then(task)
       .catch((err: unknown) =>
         store.print(chalk.red(`Error: ${err instanceof Error ? err.message : String(err)}`)),
       )
-      .finally(() => setBusy(false));
+      .finally(() => {
+        busyRef.current = false;
+        setBusy(false);
+      });
+    // Quitting waits for this before the session closes (runLessonScreen).
+    store.track(work);
   };
   /**
    * Each action starts with an empty results panel. Hints, answers, and help
@@ -311,7 +341,10 @@ export function LessonScreen() {
     const helpPage = Math.max(1, helpRows - 3);
     if (helpOpen && key.pageUp) return setHelpScroll((s) => Math.max(0, s - helpPage));
     if (helpOpen && key.pageDown) return setHelpScroll((s) => Math.min(helpMax, s + helpPage));
-    if (key.pageUp) return setScroll((s) => s + page);
+    if (key.pageUp) {
+      const top = Math.max(0, outputLines.length - outputRows);
+      return setScroll((s) => Math.min(top, s + page));
+    }
     if (key.pageDown) return setScroll((s) => Math.max(0, s - page));
     if (key.escape) return helpOpen ? toggleHelp(false) : apply({ type: "clear" });
     if (key.upArrow) return apply({ type: "historyPrev" });
@@ -343,23 +376,38 @@ export function LessonScreen() {
     if (input === "?" && empty) return toggleHelp();
     // Text and Enter in one chunk (fast typing, or a paste without bracketed
     // paste): type the text, then press Enter.
-    const nl = input.search(/[\r\n]/);
-    if (nl >= 0 && !busy) {
-      apply({ type: "insert", text: input.slice(0, nl) });
-      return onEnter();
+    // Every line is kept: each newline presses Enter, and once a statement is
+    // running the rest stays in the editor for the next Enter.
+    const parts = input.split(/\r\n|\r|\n/);
+    for (const [i, part] of parts.entries()) {
+      if (part) apply({ type: "insert", text: part });
+      if (i === parts.length - 1) break;
+      if (busyRef.current) apply({ type: "insert", text: " " });
+      else onEnter();
     }
-    if (input) apply({ type: "insert", text: input });
   });
   usePaste((text) => update((s) => edit(s, { type: "insert", text })), {
     isActive: picker === null,
   });
 
-  // The real terminal cursor sits at the insertion point.
-  const cursorX = stringWidth(PROMPT) + stringWidth(editor.line.slice(0, editor.cursor));
-  const cursorY = height - 1 - inputRows + editor.done.length;
-  setCursorPosition(
-    picker === null && !busy && cursorX < width ? { x: cursorX, y: cursorY } : undefined,
-  );
+  // The real terminal cursor sits at the insertion point; long lines scroll
+  // sideways so it stays in view.
+  const promptWidth = stringWidth(PROMPT);
+  const view = viewport(editor.line, editor.cursor, width - promptWidth);
+  const cursorX = promptWidth + view.cursorCol;
+  const cursorY = height - 2;
+  setCursorPosition(picker === null && !busy && !tooSmall ? { x: cursorX, y: cursorY } : undefined);
+
+  if (tooSmall) {
+    return (
+      <Box flexDirection="column" width={columns} height={rows}>
+        <Text wrap="wrap">
+          {chalk.bold("Learn DQL")} — the window is too small. Make it at least {MIN_COLUMNS}×
+          {MIN_ROWS} (now {columns}×{rows}), or press Ctrl+D to quit; progress is saved.
+        </Text>
+      </Box>
+    );
+  }
 
   return (
     <Box flexDirection="column" width={width} height={height}>
@@ -388,7 +436,13 @@ export function LessonScreen() {
         <LessonPicker selected={picker} rows={body - 2} width={width - 4} />
       )}
       <StatusLine lines={statusLines} />
-      <InputLine editor={editor} busy={busy} />
+      <InputLine
+        done={doneShown}
+        hidden={doneHidden}
+        line={view.text}
+        empty={isEditorEmpty(editor)}
+        busy={busy}
+      />
       <Footer
         mode={picker !== null ? "picker" : (panel ?? "lesson")}
         above={picker === null && !helpOpen ? out.above : 0}
@@ -431,5 +485,8 @@ export async function runLessonScreen(
     { alternateScreen: true, exitOnCtrlC: false },
   );
   await instance.waitUntilExit();
+  // Let a statement or lesson change that was running finish before the
+  // caller closes the session.
+  await store.idle();
   return runner;
 }

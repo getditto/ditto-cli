@@ -95,10 +95,25 @@ export function makeLessonEval(runner: Pick<LessonRunner, "submit">) {
   const report = (err: unknown) => {
     console.error(chalk.red(`Error: ${err instanceof Error ? err.message : String(err)}`));
   };
+  /** Run after everything queued so far; errors are reported, not thrown. */
+  const enqueue = (task: () => unknown): Promise<void> => {
+    chain = chain
+      .then(async () => {
+        await task();
+      })
+      .catch(report);
+    return chain;
+  };
 
   return {
     reset: () => {},
+    /** Resolves once every queued statement and command has finished. */
     drain: () => chain,
+    /**
+     * Queue a dot-command's action behind any statement still running, so
+     * \`.next\` or \`.reset\` can't interleave with a statement being checked.
+     */
+    enqueue,
     eval: (cmd: string, _ctx: unknown, _file: string, cb: ReplCallback) => {
       const text = cmd.replace(/\n$/, "");
       if (isBlankOrComments(text)) {
@@ -110,12 +125,30 @@ export function makeLessonEval(runner: Pick<LessonRunner, "submit">) {
         return;
       }
       const all = splitInput(text);
-      chain = chain
-        .then(async () => {
-          for (const s of all) await runner.submit(s);
-        })
-        .catch(report);
-      chain.then(() => cb(null));
+      enqueue(() => submitAll(runner, all)).then(() => cb(null));
     },
   };
+}
+
+/**
+ * Submit statements in order, stopping once one passes: the lesson has moved
+ * on, so the rest would be graded against a task the learner hasn't seen.
+ * Returns how many were skipped.
+ */
+export async function submitAll(
+  runner: Pick<LessonRunner, "submit">,
+  statements: readonly string[],
+  onSkipped: (n: number) => void = (n) =>
+    console.error(
+      chalk.dim(`Skipped ${n} more statement${n === 1 ? "" : "s"}: the lesson passed.`),
+    ),
+): Promise<number> {
+  for (const [i, s] of statements.entries()) {
+    if (await runner.submit(s)) {
+      const skipped = statements.length - i - 1;
+      if (skipped > 0) onSkipped(skipped);
+      return skipped;
+    }
+  }
+  return 0;
 }
