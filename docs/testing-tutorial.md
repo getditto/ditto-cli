@@ -37,8 +37,8 @@ tracing bootstrap on **stderr**.
   `dittosh tutorial --stdout -o x.md` exits 2.
 
 - [ ] **Follow it** — work through the file in a fresh terminal. Every
-  **Check:** line should hold. Pay attention to section 13, "What's new in DQL
-  (Ditto SDK 5.2)": `degraded` is 0, a support bundle is created
+  **Check:** line should hold. Pay attention to section 13, "Diagnostics and
+  advanced DQL": `degraded` is 0, a support bundle is created
   (`USER_INITIATED`), `ANY … SATISFIES` returns only `o1`, the `USE IDS` evict
   brings the count to 2, and `6 < price` returns Green tea and Coffee beans.
 
@@ -114,18 +114,14 @@ the normal case.
   both.
 
 - [ ] **Lesson picker** — Ctrl+L (or `.lessons`) shows every lesson under
-  Beginner / Intermediate / Advanced, ✓ on completed ones, `new in 5.2` on
-  lessons 21, 23, 26, 27, and the current lesson highlighted. ↑/↓, PgUp/PgDn,
+  Beginner / Intermediate / Advanced, ✓ on completed ones, and the current lesson highlighted. ↑/↓, PgUp/PgDn,
   Home/End move; Enter opens a lesson; Esc closes without moving.
 
 - [ ] **Navigation** — Ctrl+N / Ctrl+P (or `.next` / `.back`), `.goto 10`,
   `.level advanced` (lesson 19), `.level expert` and `.goto 99` (usage
   messages in the output panel).
 
-- [ ] **New-in-5.2 badge** — `.goto 21`. Expect: a highlighted
-  `New in SDK 5.2` line in the lesson panel. Same on lessons 23, 26, and 27.
-
-- [ ] **Short window** — at 80×24, lesson 21's panel shows
+- [ ] **Short window** — at 80×24, lesson 23's panel shows
   `… ^O shows the whole lesson` with the **Task:** line still visible below it.
   Ctrl+O shows the whole lesson; Ctrl+O again restores the output panel.
 

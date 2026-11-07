@@ -444,11 +444,11 @@ dittosh dql --data-dir "$DITTOSH_TUTORIAL/joins-store" --profile \
       ],
     },
     {
-      title: "What's new in DQL (Ditto SDK 5.2)",
+      title: "Diagnostics and advanced DQL",
       blocks: [
         text(`
-This CLI bundles Ditto SDK ${ctx.sdkVersion}. These examples show the DQL additions and
-fixes in SDK 5.2, using the \`products\` collection from section 3.
+These examples cover the system collections you can use for diagnostics, and some
+more advanced DQL, using the \`products\` collection from section 3.
 
 **Sync health:** \`system:sync_degradations\` lists documents that cannot sync, such as
 documents that are too large. This offline CLI never syncs, so it is always empty
@@ -469,26 +469,26 @@ dittosh dql "SELECT _id.created_at AS created, reason, file.len AS bytes FROM sy
           ["USER_INITIATED"],
         ),
         text(`
-**Storage facts:** \`system:system_info\` now reports write-ahead-log size and
-checkpoint pressure for the SQLite storage engine:
+**Storage facts:** \`system:system_info\` reports write-ahead-log size and checkpoint
+pressure for the SQLite storage engine:
 `),
         sh(
           `dittosh dql "SELECT DISTINCT key FROM system:system_info WHERE namespace = 'backend_sqlite3' ORDER BY key"`,
           ["wal_current_size_bytes"],
         ),
         text(`
-**Query metrics:** query-engine counters now use \`ditto.query.*\` names (the older
-\`dql.*\` names are deprecated). Values cover the current process, so a one-shot
-command only counts itself — the interactive shell's \`.metrics\` shows them grow.
+**Query metrics:** query-engine counters use \`ditto.query.*\` names. Values cover the
+current process, so a one-shot command only counts itself — the interactive shell's
+\`.metrics\` shows them grow.
 `),
         sh(
           `dittosh dql "SELECT key, current, unit FROM system:metrics WHERE key LIKE 'ditto.query.%' ORDER BY key"`,
           ["ditto.query.requests"],
         ),
         text(`
-**Fixed: conditions on array elements.** \`ANY … SATISFIES\` with \`AND\` now requires
-both conditions to hold for the same element. Create two orders and find the one
-with a line for 2 × p1:
+**Conditions on array elements:** \`ANY … SATISFIES\` tests the elements of an array
+one at a time; with \`AND\`, both conditions must hold for the same element. Create
+two orders and find the one with a line for 2 × p1:
 `),
         sh(
           `
@@ -497,10 +497,10 @@ dittosh dql "SELECT _id FROM orders WHERE ANY l IN lines SATISFIES l.sku = 'p1' 
 `,
           ['"o1"'],
         ),
-        text("**Check:** only **o1** matches. Earlier SDKs also returned o2."),
+        text("**Check:** only **o1** matches. o2 also contains p1, but with quantity 1."),
         text(`
-**Fixed: \`USE IDS\` for deletes and evictions.** Addressing documents by ID now
-removes them. Evict p2, confirm it's gone, then restore it:
+**Addressing documents by ID:** \`USE IDS\` targets documents by \`_id\` without a
+WHERE clause. Evict p2, confirm it's gone, then restore it:
 `),
         sh(
           `
@@ -511,9 +511,9 @@ dittosh dql "INSERT INTO products VALUES ({'_id':'p2','name':'Paper filters','ca
           ['"total": 2'],
         ),
         text(`
-**Fixed: comparisons written constant-first.** With an index on \`price\`, \`6 < price\`
-now reads the right index range. Run it with \`--explain\` and look for \`"low"\` in the
-index range:
+**Comparisons written constant-first:** with an index on \`price\`, \`6 < price\` reads
+the same index range as \`price > 6\`. Run it with \`--explain\` and look for \`"low"\` in
+the index range:
 `),
         sh(
           `
@@ -524,9 +524,9 @@ dittosh dql "SELECT _id FROM products WHERE 6 < price" --explain
           ["Green tea", "Coffee beans"],
         ),
         text(`
-**Fixed: indexes that mix sort directions.** A composite index on
-\`(category ASC, price DESC)\` now returns the most expensive product first within
-each category:
+**Indexes that mix sort directions:** a composite index on
+\`(category ASC, price DESC)\` returns the most expensive product first within each
+category:
 `),
         sh(
           `

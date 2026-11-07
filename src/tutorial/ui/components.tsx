@@ -109,11 +109,7 @@ export function LessonPicker({
         }
         const l = runner.lessons[r.index]!;
         const mark = runner.isCompleted(r.index) ? chalk.green("✓") : " ";
-        const isNew = l.newIn ? chalk.blue("  new in 5.2") : "";
-        const line = clip(
-          ` ${mark} ${String(r.index + 1).padStart(2)}. ${l.title}${isNew}`,
-          width - 1,
-        );
+        const line = clip(` ${mark} ${String(r.index + 1).padStart(2)}. ${l.title}`, width - 1);
         return (
           <Text key={`lesson-${r.index}`} inverse={r.index === selected}>
             {line}

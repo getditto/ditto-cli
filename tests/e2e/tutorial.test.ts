@@ -37,7 +37,7 @@ describe("e2e: dittosh tutorial (Markdown generator)", () => {
       expect(first.stderr).toContain("Wrote the tutorial to");
       const md = fs.readFileSync(path.join(dir, "dittosh-tutorial.md"), "utf8");
       expect(md).toMatch(/^# Ditto CLI: a hands-on tutorial/);
-      expect(md).toContain("What's new in DQL (Ditto SDK 5.2)");
+      expect(md).toContain("Diagnostics and advanced DQL");
       expect(md).toContain("dittosh tutorial --interactive");
 
       const again = await cli(["tutorial"], { cwd: dir });

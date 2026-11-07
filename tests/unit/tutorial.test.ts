@@ -303,13 +303,12 @@ describe("LessonRunner", () => {
   it("announces a new level and finishes after the last lesson", async () => {
     const lessons: Lesson[] = [
       { ...LESSONS[0]!, check: () => ({ pass: true }) },
-      { ...LESSONS.find((l) => l.level === "advanced" && l.newIn)!, check: () => ({ pass: true }) },
+      { ...LESSONS.find((l) => l.level === "advanced")!, check: () => ({ pass: true }) },
     ];
     const { runner, out } = makeRunner(undefined, { lessons });
     await runner.start();
     await runner.submit("SELECT 1");
     expect(out()).toContain("On to Advanced!");
-    expect(out()).toContain("New in SDK 5.2");
     await runner.submit("SELECT 1");
     expect(out()).toContain("You finished all 2 lessons!");
 

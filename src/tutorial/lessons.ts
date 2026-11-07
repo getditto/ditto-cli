@@ -43,8 +43,6 @@ export interface Lesson {
   check: (ctx: LessonCheckContext) => CheckResult | Promise<CheckResult>;
   /** Shown after a pass: the takeaway. */
   success: string;
-  /** SDK version that introduced or fixed the behavior this lesson shows. */
-  newIn?: string;
 }
 
 export const SEED_PRODUCTS = [
@@ -704,8 +702,6 @@ requires all of them.) The \`orders\` collection has three orders.`,
     },
     success:
       "Order o2 also contains p1, but with quantity 1 — SATISFIES checks both conditions on each line together.",
-    newIn:
-      "SDK 5.2 fixed `AND` inside SATISFIES; 5.1 ignored part of the condition and also returned o2.",
   },
   {
     level: "advanced",
@@ -777,7 +773,6 @@ read results straight from the index instead of sorting them.`,
         : fail(`Expected: ${expected.join(", ")}.`);
     },
     success: "Run it with EXPLAIN to see the indexScan feeding the results in order.",
-    newIn: "SDK 5.2 fixed ordering for indexes that mix ASC and DESC keys.",
   },
   {
     level: "advanced",
@@ -844,7 +839,6 @@ documents.`,
       return rows.length === 0 ? pass : fail("p7 is still in the store.");
     },
     success: "USE IDS works with UPDATE, EVICT, and DELETE.",
-    newIn: "SDK 5.2 fixed DELETE/EVICT … USE IDS, which silently removed nothing in 5.1.",
   },
   {
     level: "advanced",
@@ -869,8 +863,6 @@ sync — always empty in this offline CLI).`,
             "Expected keys such as `wal_current_size_bytes` — filter on `namespace = 'backend_sqlite3'`.",
           ),
     success: "In the regular shell, `.metrics` turns `system:metrics` into readable tables.",
-    newIn:
-      "SDK 5.2 added the WAL and checkpoint keys, `system:sync_degradations`, and `ditto.query.*` metrics.",
   },
 ];
 

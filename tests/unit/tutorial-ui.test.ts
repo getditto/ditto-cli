@@ -441,7 +441,7 @@ describe("LessonScreen", () => {
 
   it("Ctrl+O toggles the whole lesson in a short window", async () => {
     const { screen, press } = await mountScreen(22);
-    await press(".goto 21\r", 60); // a long lesson with a 5.2 note
+    await press(".goto 23\r", 60); // a long lesson with a 5.2 note
     expect(screen()).toContain("^O shows the whole lesson");
     expect(screen()).toContain("Task:");
     await press("\x0f");

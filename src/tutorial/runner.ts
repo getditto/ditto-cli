@@ -254,7 +254,6 @@ export class LessonRunner {
     if (!lesson) return [];
     const t = (s: string) => highlight(opts.unwrap ? s.replace(/(?<!\n)\n(?![\n ])/g, " ") : s);
     const out = [t(lesson.concept)];
-    if (lesson.newIn) out.push("", `${chalk.bgBlue.white(" New in SDK 5.2 ")} ${t(lesson.newIn)}`);
     if (lesson.sql) out.push("", `${chalk.dim("If you know SQL:")} ${t(lesson.sql)}`);
     out.push("", chalk.dim("Syntax"), ...lesson.syntax.map((s) => `  ${chalk.cyan(s)}`));
     out.push("", `${chalk.bold.yellow("Task:")} ${t(lesson.task)}`);
