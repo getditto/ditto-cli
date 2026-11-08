@@ -77,6 +77,13 @@ async function loadSdk(): Promise<DittoSdk> {
   return sdkModule;
 }
 
+/** DITTOSH_DEBUG → SDK log level: unset/0/false → off, "verbose" → Verbose, anything else → Debug. */
+export function sdkDebugLevel(value: string | undefined): "Debug" | "Verbose" | null {
+  const v = value?.trim().toLowerCase();
+  if (!v || v === "0" || v === "false" || v === "off") return null;
+  return v === "verbose" ? "Verbose" : "Debug";
+}
+
 export class DittoSession {
   private constructor(private readonly ditto: sdk.Ditto) {}
 
@@ -96,7 +103,11 @@ export class DittoSession {
       // Known cosmetic issue: the native tracing bootstrap still writes 7
       // WARN/INFO lines to stderr at init (fd-level writes, not suppressible
       // from JS). stdout stays clean; piping is unaffected.
-      sdk.Logger.enabled = false;
+      // `--debug` / DITTOSH_DEBUG turns SDK logs on. The native logger writes
+      // to stderr, so stdout stays results-only.
+      const debug = sdkDebugLevel(process.env.DITTOSH_DEBUG);
+      sdk.Logger.enabled = debug !== null;
+      if (debug) sdk.Logger.minimumLogLevel = debug;
       await sdk.init();
       initialized = true;
     }
@@ -152,6 +163,36 @@ export class DittoSession {
   /** Execute one DQL statement (the SDK accepts exactly one per call, no trailing ";"). */
   async execute(statement: string, args?: sdk.DQLQueryArguments): Promise<sdk.QueryResult> {
     return this.ditto.store.execute(statement, args);
+  }
+
+  /** Copy an attachment (e.g. a support bundle .tar) to a file. */
+  async saveAttachment(
+    token: { id: string; len: number | bigint; metadata: Record<string, string> },
+    filePath: string,
+    timeoutMs = 60_000,
+  ): Promise<void> {
+    // The fetch completes through a native callback that doesn't keep Node's
+    // event loop alive: without a pending timer, Node can exit mid-fetch (an
+    // "unsettled top-level await", then a native abort). The timeout timer
+    // holds the loop open and turns a stuck fetch into an error.
+    const fetcher = this.ditto.store.fetchAttachment(token);
+    let timer: NodeJS.Timeout | undefined;
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(
+        () => reject(new Error(`fetching attachment ${token.id} timed out`)),
+        timeoutMs,
+      );
+    });
+    try {
+      const attachment = await Promise.race([fetcher, timeout]);
+      if (!attachment) throw new Error(`attachment ${token.id} is not available on this device`);
+      await Promise.race([attachment.copyToPath(filePath), timeout]);
+    } catch (err) {
+      fetcher.stop();
+      throw err;
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   async close(): Promise<void> {

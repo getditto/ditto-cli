@@ -278,4 +278,20 @@ describe("rewriteDefaultSubcommand", () => {
       "SELECT 1",
     ]);
   });
+
+  it("--debug is a global flag and support-bundle is a known subcommand", () => {
+    expect(rewriteDefaultSubcommand(["dql", "--debug", "SELECT 1"])).toEqual([
+      "--debug",
+      "dql",
+      "exec",
+      "SELECT 1",
+    ]);
+    expect(rewriteDefaultSubcommand(["dql", "-d", "/tmp/x", "support-bundle", "--list"])).toEqual([
+      "dql",
+      "support-bundle",
+      "-d",
+      "/tmp/x",
+      "--list",
+    ]);
+  });
 });

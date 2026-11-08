@@ -64,6 +64,7 @@ describe("renderTutorial", () => {
   it("fences every code block and keeps the shell default expansion literal", () => {
     const md = renderTutorial(CTX);
     expect(md.match(/```/g)!.length % 2).toBe(0);
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: the shell's literal ${TMPDIR:-/tmp} is what we check for
     expect(md).toContain('mktemp -d "${TMPDIR:-/tmp}/dittosh-tutorial.XXXXXX"');
     expect(md).toContain("printf 'Practice directory: %s\\n'");
   });

@@ -719,6 +719,42 @@ the CLI, and upgrading the CLI does not automatically update skills.
       ],
     },
     {
+      title: "Report a problem",
+      blocks: [
+        text(`
+When something goes wrong, \`dittosh doctor\` checks the platform, Node, the data
+directory, the license, the SDK, and the store lock. Add \`--report\` to save
+everything a maintainer needs into one file you can attach to a GitHub issue:
+`),
+        sh(
+          `
+dittosh doctor
+dittosh doctor --report "$DITTOSH_TUTORIAL/dittosh-report.tar.gz"
+tar -tzf "$DITTOSH_TUTORIAL/dittosh-report.tar.gz"
+`,
+          ["report.md", "ditto-support-bundle.tar"],
+        ),
+        text(`
+The bundle holds:
+
+- \`report.md\` (and the same data as \`report.json\`): versions, OS and terminal
+  details, the checks, paths and free space, and dittosh settings. Credentials
+  appear only as "set" or "not set", and your home folder shows as \`~\`.
+- A store summary: collection names, document counts, and indexes, with no
+  document contents. Leave it out with \`--no-store\`.
+- The last failed command and the error it printed. dittosh saves this
+  whenever a command fails, so you can make the report after the fact.
+- \`ditto-support-bundle.tar\`: Ditto's own support bundle, with the SDK's debug
+  logs and the store configuration (secrets removed). Leave it out with
+  \`--no-sdk-bundle\`, or save just this part with \`dittosh dql support-bundle\`.
+
+Extract the file and read it before you share it. To watch the SDK's logs
+while you reproduce a problem, add \`--debug\` to any command; the logs go to
+stderr, so results on stdout are unchanged.
+`),
+      ],
+    },
+    {
       title: "Update the CLI and clean up",
       blocks: [
         text(
@@ -767,6 +803,7 @@ const TROUBLESHOOTING = `
 | \`.metrics\` says metrics are disabled | Restart the shell; metrics are enabled when the store opens. |
 | Agent skills are not discovered | Confirm the project path, inspect \`skills list\`, and start a fresh session in that AI tool. |
 | Startup warnings alongside results | Native SDK startup messages go to stderr; use stdout for JSON pipelines. |
+| Anything else | Run \`dittosh doctor --report\` and attach the file to a GitHub issue. |
 `;
 
 /** Render the tutorial as Markdown. */

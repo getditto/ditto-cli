@@ -41,7 +41,7 @@ The CLI ships with a built-in offline license and runs entirely locally — no a
 
 ```bash
 # check your install
-dittosh dql doctor
+dittosh doctor
 
 # load a sample dataset
 dittosh dql dataset load movies
@@ -98,9 +98,16 @@ dittosh dql "SELECT _id FROM movies WHERE _id.year = '2001' LIMIT 1" \
   | dittosh dql "SELECT * FROM movies WHERE _id = :id" --args -
 ```
 
-### `dittosh dql doctor`
+### `dittosh doctor` (also `dittosh dql doctor`)
 
 Platform/arch, Node version, data-directory writability, token validity + expiry, SDK load, and store-lock probe — with an exit code that says what's wrong.
+
+**Reporting a bug?** `dittosh doctor --report` writes `dittosh-report-<time>.tar.gz` to attach to a [GitHub issue](https://github.com/getditto/ditto-cli/issues/new?template=bug_report.yml): versions, OS and terminal details, the checks, paths and free space, dittosh settings (credentials only as set/not set), a store summary (collection names, counts, indexes; no document contents), the last failed command and its error output, and the Ditto SDK support bundle with the SDK's debug logs. `--no-store` and `--no-sdk-bundle` leave parts out.
+
+- `dittosh dql support-bundle [-o file.tar]` saves only the Ditto SDK support bundle (`--list` shows the ones kept in the store).
+- `--debug` (or `DITTOSH_DEBUG=1`) on any command shows the SDK's debug logs and stack traces on stderr; stdout is unchanged.
+
+See [Troubleshooting](docs/troubleshooting.md).
 
 ### `dittosh dql collections` / `dittosh dql indexes [collection]`
 
