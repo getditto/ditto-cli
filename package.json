@@ -35,6 +35,7 @@
     "dev": "tsx --env-file=.env src/cli/index.ts",
     "build": "tsup",
     "release:check": "tsx scripts/release-check.ts",
+    "release:homebrew": "scripts/test-homebrew.sh",
     "typecheck": "tsc --noEmit",
     "lint": "biome check src tests scripts",
     "lint:fix": "biome check --write src tests scripts",

@@ -43,6 +43,7 @@ npm run typecheck          # tsc --noEmit
 npm run lint               # biome check
 npm run spike:a            # SDK init/token/DQL smoke script
 scripts/install-release.sh # stamp token → RELEASE=true build → npm i -g . (installs `dittosh` globally)
+npm run release:homebrew   # real `brew install` of the release formula: this Mac + Linux arm64/x64 in Docker
 ```
 
 ## User phrasing worth knowing
@@ -65,6 +66,11 @@ scripts/install-release.sh # stamp token → RELEASE=true build → npm i -g . (
   tagging. Release notes are required and become the GitHub release body.
 - `npm run release:check` verifies stamping, packaging, and installation with an
   intentionally invalid fixture license; it does not publish or exercise DQL.
+- The Homebrew formula (`formula()` in `scripts/release.ts`) deletes the Ditto
+  SDK's native binaries for other platforms after `npm install`. Changing the
+  formula ⇒ run `npm run release:homebrew` (real `brew install` on this Mac +
+  Linux arm64/x64 in Docker) before tagging. How it works and its caveats:
+  `docs/publishing.md` → "The Homebrew formula".
 - Follow `docs/publishing.md` for setup, platform checks, and partial-release
   recovery. Never overwrite a published npm version or move a release tag.
 
