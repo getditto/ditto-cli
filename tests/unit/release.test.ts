@@ -9,6 +9,8 @@ import {
   distTag,
   formula,
   inspectArchive,
+  isLatestStable,
+  npmEnabled,
   PACKAGE,
   registry,
   releaseVersion,
@@ -109,7 +111,9 @@ describe("Homebrew release formula", () => {
   it("uses the exact immutable artifact and supports both macOS and Linux", () => {
     const hash = digest(Buffer.from("release"));
     const source = formula("1.2.3", hash);
-    expect(source).toContain('url "https://registry.npmjs.org/@dittolive/cli/-/cli-1.2.3.tgz"');
+    expect(source).toContain(
+      'url "https://github.com/getditto/ditto-cli/releases/download/v1.2.3/dittolive-cli-1.2.3.tgz"',
+    );
     expect(source).toContain(`sha256 "${hash}"`);
     expect(source).toContain('depends_on "node@24"');
     expect(source).toContain("on_macos do\n    depends_on arch: :arm64");
@@ -170,6 +174,21 @@ describe("Homebrew release formula", () => {
     expect(r.status).toBe(0);
     expect(fs.readdirSync(path.join(sdk, "node")).sort()).toEqual(["ditto.cjs.js", ...kept].sort());
     expect(fs.existsSync(path.join(sdk, "web"))).toBe(true);
+  });
+
+  it("publishes to npm only when PUBLISH_NPM is true", () => {
+    expect(npmEnabled({})).toBe(false);
+    expect(npmEnabled({ PUBLISH_NPM: "false" })).toBe(false);
+    expect(npmEnabled({ PUBLISH_NPM: "true" })).toBe(true);
+  });
+
+  it("marks only the newest stable version as latest", () => {
+    expect(isLatestStable("0.2.0", ["v0.1.0"])).toBe(true);
+    expect(isLatestStable("0.2.0", ["v0.1.0", "v0.2.0"])).toBe(true); // a rerun
+    expect(isLatestStable("0.2.0", ["v0.1.0", "v0.3.0-rc.1"])).toBe(true);
+    expect(isLatestStable("0.1.1", ["v0.1.0", "v0.2.0"])).toBe(false);
+    expect(isLatestStable("0.3.0-rc.1", ["v0.2.0"])).toBe(false);
+    expect(isLatestStable("1.0.0", [])).toBe(true);
   });
 
   it("rejects injected Ruby and malformed source checksums", () => {

@@ -20,6 +20,13 @@ concurrency:
 
 env:
   RELEASE_TAG: ${{ github.ref_name }}
+  # Opt-in publishing targets (repository variables). By default a release is
+  # GitHub-only: the tested archive, SHA256SUMS, and a dittosh.rb pointing at
+  # that archive go on the GitHub release, and the formula reaches
+  # getditto/homebrew-tap through a reviewed PR there. Set PUBLISH_NPM=true to
+  # also publish to npm, and UPDATE_HOMEBREW_TAP=true to write the tap directly
+  # (needs HOMEBREW_TAP_TOKEN).
+  PUBLISH_NPM: ${{ vars.PUBLISH_NPM }}
 
 jobs:
   prepare:
@@ -46,7 +53,7 @@ jobs:
         id: validate
         run: node --import tsx scripts/release.ts validate "$RELEASE_TAG"
       - name: Verify stable tap access before publishing anything
-        if: steps.validate.outputs.prerelease == 'false' && (github.event_name == 'push' || !inputs.dry-run)
+        if: vars.UPDATE_HOMEBREW_TAP == 'true' && steps.validate.outputs.prerelease == 'false' && (github.event_name == 'push' || !inputs.dry-run)
         env:
           GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           TAP_REPO: ${{ vars.HOMEBREW_TAP_REPOSITORY || 'getditto/homebrew-tap' }}
@@ -156,12 +163,14 @@ jobs:
           node-version: "24"
       - run: npm ci
       - name: Use npm with trusted publishing support
+        if: vars.PUBLISH_NPM == 'true'
         run: npm install --global npm@11.21.0
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: release-package
           path: build/release
       - name: Publish the tested package to npm
+        if: vars.PUBLISH_NPM == 'true'
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: node --import tsx scripts/release.ts npm "$RELEASE_TAG"
@@ -172,7 +181,7 @@ jobs:
 
   homebrew:
     needs: [prepare, publish]
-    if: needs.prepare.outputs.prerelease == 'false'
+    if: vars.UPDATE_HOMEBREW_TAP == 'true' && needs.prepare.outputs.prerelease == 'false'
     runs-on: ubuntu-24.04
     environment: homebrew
     steps:

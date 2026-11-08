@@ -1,16 +1,32 @@
 # Publishing dittosh
 
-Pushing `vX.Y.Z` runs `.github/workflows/release.yml`. The workflow tests one
-stamped npm package, publishes it to npm and GitHub, and updates the Homebrew
-formula for a stable release. No npm or Homebrew publishing occurs on a branch
-push or pull request.
+Pushing `vX.Y.Z` runs `.github/workflows/release.yml`. The workflow builds and
+tests one stamped package, then publishes a GitHub release with the archive,
+`SHA256SUMS`, and a `dittosh.rb` formula that downloads that archive. Homebrew
+users get the release once that formula is merged into
+[getditto/homebrew-tap](https://github.com/getditto/homebrew-tap) through a
+reviewed PR, where the tap's own CI installs it on macOS and Linux. No publishing
+occurs on a branch push or pull request.
+
+By default a release is **GitHub and Homebrew only**. Two repository variables
+turn on the other targets:
+
+| Variable | Effect when `true` |
+| --- | --- |
+| `PUBLISH_NPM` | Also publish `@dittolive/cli` to npm, before the GitHub release (needs npm trusted publishing or `NPM_TOKEN`). |
+| `UPDATE_HOMEBREW_TAP` | Write `Formula/dittosh.rb` in the tap directly instead of through a PR (needs `HOMEBREW_TAP_TOKEN`). |
+
+Neither is set today: dittosh isn't on npm yet, and tap changes go through
+reviewed PRs.
 
 ## Initial setup
 
 The CLI package is `@dittolive/cli`; its version is independent of the agent
 skills bundle. The CLI consumes skill releases from `getditto/agent-skills`.
 
-Configure these in the CLI repository before creating its first release tag:
+Configure these in the CLI repository before creating its first release tag.
+The npm and tap rows are only needed if you turn on `PUBLISH_NPM` or
+`UPDATE_HOMEBREW_TAP`:
 
 | Setting | Purpose |
 | --- | --- |
@@ -59,6 +75,19 @@ git tag -a vX.Y.Z -m "dittosh vX.Y.Z"
 git push origin vX.Y.Z
 ```
 
+6. When the workflow finishes, open a PR in `getditto/homebrew-tap` that replaces
+   `Formula/dittosh.rb` with the `dittosh.rb` attached to the GitHub release:
+
+```bash
+gh release download vX.Y.Z --repo getditto/ditto-cli --pattern dittosh.rb --dir /tmp/dittosh-vX.Y.Z
+# in a clone of getditto/homebrew-tap, on a new branch:
+cp /tmp/dittosh-vX.Y.Z/dittosh.rb Formula/dittosh.rb
+git commit -am "dittosh vX.Y.Z" && git push && gh pr create --fill
+```
+
+   Merge it once the tap's macOS and Linux install checks pass. Users get the
+   new version with `brew update && brew upgrade getditto/tap/dittosh`.
+
 The workflow rejects tag/package/lock mismatches, missing notes, and commits
 outside main's history. It does not change versions or create tags for you.
 
@@ -82,8 +111,12 @@ additional features merged before that tag is created.
 ## The Homebrew formula
 
 `scripts/release.ts` (`formula()`) generates `Formula/dittosh.rb` from the
-exact npm tarball and its SHA-256. The release workflow publishes it to the tap,
-and attaches it to the GitHub release.
+exact release archive and its SHA-256. The formula downloads that archive from
+the GitHub release
+(`https://github.com/getditto/ditto-cli/releases/download/vX.Y.Z/dittolive-cli-X.Y.Z.tgz`),
+so it doesn't depend on npm. The release workflow attaches it to the GitHub
+release; it reaches the tap through a PR (or directly with
+`UPDATE_HOMEBREW_TAP`).
 
 Homebrew uses a formula, not a macOS-only cask, so the same formula serves macOS
 and Linux. It depends on `node@24` and installs under its own Cellar;
@@ -224,20 +257,22 @@ Things to know:
 
 ## Stable releases, prereleases, and retries
 
-- Stable versions advance npm `latest`, publish a GitHub release, and update the
-  Homebrew stable formula. An older stable version uses npm `previous` and never
-  downgrades the tap or GitHub's latest release.
-- Versions such as `v0.2.0-rc.1` use npm `next`, create a GitHub prerelease, and
-  do not update the Homebrew stable formula.
-- GitHub assets are the npm `.tgz`, `SHA256SUMS`, and the generated `dittosh.rb`.
-  The GitHub release stays a draft until all assets are uploaded.
-- If npm succeeded but GitHub or Homebrew failed, rerun the workflow for the
-  same tag. It restores the npm tarball, verifies its integrity and `gitHead`,
-  retests those immutable bytes, and resumes the remaining publication steps.
-  It never overwrites an npm version or moves a release tag.
-- If the tap update fails, the npm and GitHub releases remain usable; the workflow
-  reports failure. Fix tap access and rerun. GitHub release creation does not
-  need to be repeated manually.
+- A stable version publishes a GitHub release marked "latest" when it's newer
+  than every other stable release; an older stable version (a patch to an old
+  line) never takes "latest" or downgrades the tap. With `PUBLISH_NPM`, npm's
+  `latest` dist-tag decides instead, and older versions use npm `previous`.
+- Versions such as `v0.2.0-rc.1` create a GitHub prerelease (npm `next` with
+  `PUBLISH_NPM`) and are not for the stable tap formula.
+- GitHub assets are the release `.tgz`, `SHA256SUMS`, and the generated
+  `dittosh.rb`. The GitHub release stays a draft until all assets are uploaded.
+- If a run fails before the GitHub release is published, rerun the workflow for
+  the same tag. A published GitHub release is never changed: a rerun checks that
+  its assets match and stops if they differ.
+- With `PUBLISH_NPM`: if npm succeeded but a later step failed, a rerun restores
+  the npm tarball, verifies its integrity and `gitHead`, retests those immutable
+  bytes, and resumes. It never overwrites an npm version or moves a release tag.
+- With `UPDATE_HOMEBREW_TAP`: if the tap update fails, the GitHub release stays
+  usable and the workflow reports failure. Fix tap access and rerun.
 
 For a complete test without publishing, dispatch the workflow for an existing
 tag with `dry-run` enabled (the default). This still needs the real CLI license
