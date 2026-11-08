@@ -15,10 +15,14 @@ The Ditto CLI: an npm/Homebrew-installable TypeScript CLI (binary `dittosh` — 
 
 ## Layout
 
-- `src/cli/` — commander entry (`index.ts`), injected version (`version.ts`, tsup `define`), `groups/` per command group (`dql`, `skills`, `system`)
+- `src/cli/` — commander entry (`index.ts`), injected version (`version.ts`, tsup `define`), `groups/` per command group (`dql`, `skills`, `system`, `tutorial`)
 - `src/config/` — data-dir resolution (`--data-dir` > `DITTOSH_DATA_DIR` > OS default), config dir (`DITTOSH_CONFIG_DIR` > OS default; env-paths caches homedir at module load, so tests must use this override, not `$HOME`), persisted state (one-time warnings, update cache)
 - `src/identity/` — token loading (dev env / release reassembly), expiry
-- `src/ditto/session.ts` — the only SDK touchpoint: init/open/close, log taming, lock mapping
+- `src/ditto/session.ts` — the only SDK touchpoint: init/open/close, log taming, lock mapping; enables the startup-gated `system:metrics` exporter (`systemParameters`)
+- `src/tutorial/` — `dittosh tutorial`: Markdown walkthrough as structured blocks (`content.ts`, runnable blocks executed by `tests/e2e/tutorial.test.ts`) and interactive DQL lessons (`lessons.ts` by level, `runner.ts`, `lesson-eval.ts`; every sample answer verified in `tests/integration/lessons.test.ts`). The full-screen lesson view is Ink + React in `src/tutorial/ui/` (`app.tsx` screen, `components.tsx`, `context.tsx` provider for the runner/store, pure `editor.ts`/`layout.ts`/`store.ts`/`help.ts` (right drawer: help, or the data view from `src/tutorial/schema.ts`)/`outline.ts` (left lesson sidebar); tests in `tests/unit/tutorial-ui.test.ts` with a fake TTY). It is lazy-loaded (`await import`) so Ink/React never load for other commands; `--plain` or a <60×20 window uses the node:repl shell. Wiring: `src/cli/groups/tutorial.ts`, `tutorial-repl.ts`
+- `src/bench/` — `dittosh dql bench` (wiring: `src/cli/groups/dql/bench.ts`; also `dataset run --runs/--warmup`): benchmark file parsing (`spec.ts`, the dql-metrics-benchmark `benchmarks.json` format), the timed runner (`runner.ts`: pre → warmup → reset+timed run+after-each → post), stats matching the benchmark runners (`stats.ts`: floor-indexed p95/p99, adaptive ~250 ms warmup), and `--example` sample files from the dataset catalogs (`example.ts`). User docs: `docs/benchmarking.md`
+- `src/support/` — diagnostics for bug reports: `dittosh doctor --report` (wiring: `src/cli/groups/doctor.ts`, shared by `dittosh doctor` and `dittosh dql doctor`) gathers a redacted report (`report.ts`, `redact.ts`) and archives it as .tar.gz (`archive.ts`); `sdk-bundle.ts` requests the SDK 5.2 support bundle (`EXECUTE FUNCTION system_request_support_bundle()` → attachment token → `DittoSession.saveAttachment`; rate limit 3/10 min per store → falls back to the newest in `system:support_bundles`; also `dittosh dql support-bundle`); `last-error.ts` tails stderr and saves the last failed command to `<config dir>/last-error.json` (written from `src/cli/index.ts`). `--debug`/`DITTOSH_DEBUG` enables SDK logs (native logger writes to stderr). Never put the token or document contents in a report. User docs: `docs/troubleshooting.md`
+- `src/metrics/` — `system:metrics` row parsing and section grouping (REPL `.metrics`, rendered by `src/render/metrics.ts`)
 - `src/query/` — statement classifier, splitter, param binding, result extraction, row cap
 - `src/render/` — table (terminal-width fitting)/JSON/CSV/markdown/HTML/vertical, pager (`$PAGER`/`less`, `--no-pager`/`DITTOSH_NO_PAGER`), `-o/--out`, (M4: explain/profile/advise renderers)
 - `datasets/` — vendored benchmark suite definitions (movies, retail, retail-joins, pos); **no generated data ever committed**
@@ -39,6 +43,7 @@ npm run typecheck          # tsc --noEmit
 npm run lint               # biome check
 npm run spike:a            # SDK init/token/DQL smoke script
 scripts/install-release.sh # stamp token → RELEASE=true build → npm i -g . (installs `dittosh` globally)
+npm run release:homebrew   # real `brew install` of the release formula: this Mac + Linux arm64/x64 in Docker (`scripts/test-homebrew.sh mac --keep` leaves the Mac install to try)
 ```
 
 ## User phrasing worth knowing
@@ -61,12 +66,17 @@ scripts/install-release.sh # stamp token → RELEASE=true build → npm i -g . (
   tagging. Release notes are required and become the GitHub release body.
 - `npm run release:check` verifies stamping, packaging, and installation with an
   intentionally invalid fixture license; it does not publish or exercise DQL.
+- The Homebrew formula (`formula()` in `scripts/release.ts`) deletes the Ditto
+  SDK's native binaries for other platforms after `npm install`. Changing the
+  formula ⇒ run `npm run release:homebrew` (real `brew install` on this Mac +
+  Linux arm64/x64 in Docker) before tagging. How it works and its caveats:
+  `docs/publishing.md` → "The Homebrew formula".
 - Follow `docs/publishing.md` for setup, platform checks, and partial-release
   recovery. Never overwrite a published npm version or move a release tag.
 
 ## Known platform facts
 
-- SDK `@dittolive/ditto@5.1.0` native matrix: macOS arm64, Linux x64/arm64, Windows x64 (no darwin-x64).
+- SDK `@dittolive/ditto@5.2.0` native matrix: macOS arm64, Linux x64/arm64, Windows x64 (no darwin-x64).
 - `DittoConfig(appId, { mode: "smallPeersOnly" }, dir)` + `Ditto.open` + `setOfflineOnlyLicenseToken` — verified (Spike A). EXPLAIN → first item `plan`; PROFILE → trailing `~request_profile` item.
 - The native tracing bootstrap writes ~7 WARN/INFO lines to **stderr** at `sdk.init()` (fd-level, not suppressible from JS). Cosmetic only; stdout is clean.
 - Two processes on one data dir → "File already locked" → mapped to `LockError` (exit 4).

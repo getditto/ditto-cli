@@ -1,0 +1,44 @@
+name: Bug report
+description: Something in dittosh doesn't work as expected
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a problem. The fastest way to help us is a diagnostic report:
+
+        ```bash
+        dittosh doctor --report
+        ```
+
+        It writes `dittosh-report-<time>.tar.gz` in the current folder, with versions, OS details,
+        health checks, the last failed command, a store summary (no document contents), and Ditto's
+        SDK support bundle (SDK debug logs). The license token is never included. The SDK bundle is
+        Ditto's own file and holds the database ID, full file paths, and peer keys. Extract it and
+        read it before attaching it. Leave parts out with `--no-store` or `--no-sdk-bundle`.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you run, what did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Command and output
+      description: The exact command and what it printed. Add `--debug` to see SDK logs.
+      render: shell
+  - type: textarea
+    id: report
+    attributes:
+      label: Diagnostic report
+      description: Drag the `dittosh-report-….tar.gz` file here. If you can't attach files, paste the contents of `report.md` instead.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: dittosh version
+      description: Output of `dittosh --version`
+      placeholder: "0.2.0"

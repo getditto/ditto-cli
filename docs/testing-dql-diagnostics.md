@@ -76,7 +76,19 @@ Two things that are **not** bugs:
   dittosh dql "SELECT _id.title FROM movies WHERE rated = 'PG'" --profile
   ```
   Expect: per-operator timings with the hotspot flagged (`▲`), a results
-  summary line.
+  summary line (with `Stor`/`Yields` totals when the SDK reports them), a dim
+  `db … · request … · flags … · directives #profile` header line, and under
+  each operator dim detail lines: `recv … · send … · stor …`, `yields: budget
+  N · receiver N …` (largest first), and the operator's remaining attributes
+  (long values end in `…`).
+
+- [ ] **Join subplan**
+  ```bash
+  dittosh dql "SELECT m._id, y.label FROM movies m JOIN years y ON m.year = y.year LIMIT 50" --profile
+  ```
+  (needs a `years` collection with an index on `year`.) Expect: the `nlJoin`
+  operator is followed by a nested `inner: sequence` subtree with its own
+  timings, rather than a raw JSON `inner=` attribute.
 
 - [ ] **Server breakdown with `--time`**
   ```bash

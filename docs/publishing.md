@@ -48,6 +48,9 @@ includes the public repository metadata needed for provenance.
    file is mandatory and becomes the GitHub release body verbatim.
 3. Run `npm run release:check`, lint, typecheck, and the tests. The packaging
    check uses an intentionally invalid fixture license and never publishes.
+   If the formula or how it installs changed, also run
+   `npm run release:homebrew` ([Test the formula locally](#test-the-formula-locally)):
+   the release workflow only installs the formula after the tag is pushed.
 4. Merge the reviewed release branch and check CI on main.
 5. Tag that reviewed commit and push the tag:
 
@@ -58,6 +61,7 @@ git push origin vX.Y.Z
 
 The workflow rejects tag/package/lock mismatches, missing notes, and commits
 outside main's history. It does not change versions or create tags for you.
+
 `releases/v0.1.0.md` describes the initial CLI release; update it with any
 additional features merged before that tag is created.
 
@@ -67,16 +71,156 @@ additional features merged before that tag is created.
   checked for the raw token, and no development credentials are used at runtime.
 - Exact artifact installation and offline DQL on macOS arm64, Linux x64,
   Linux arm64, and Windows x64 through npm.
-- Homebrew formula installation, offline DQL, and install-channel detection on
-  macOS arm64 and Linux x64/arm64. Before npm publication, a temporary local
-  HTTP server supplies the same package bytes to the test formula.
+- Homebrew formula installation, offline DQL, install-channel detection, and
+  that only the machine's own SDK binary is left, on macOS arm64 and Linux
+  x64/arm64. Before npm publication, a temporary local HTTP server supplies the
+  same package bytes to the test formula. See
+  [The Homebrew formula](#the-homebrew-formula).
 - npm and Homebrew use the same tarball and SHA-256. Direct runtime dependencies
   are pinned to the versions in the build lockfile, including the native SDK.
 
-Homebrew uses a formula, not a macOS-only cask. It manages Node.js 24 and installs
-under its own Cellar; `dittosh update` therefore selects `brew upgrade`, while
-npm installations select `npm install -g @dittolive/cli@latest`. Intel Macs are
-excluded because the current SDK has no darwin-x64 native binary.
+## The Homebrew formula
+
+`scripts/release.ts` (`formula()`) generates `Formula/dittosh.rb` from the
+exact npm tarball and its SHA-256. The release workflow publishes it to the tap,
+and attaches it to the GitHub release.
+
+Homebrew uses a formula, not a macOS-only cask, so the same formula serves macOS
+and Linux. It depends on `node@24` and installs under its own Cellar;
+`dittosh update` therefore selects `brew upgrade`, while npm installations
+select `npm install -g @dittolive/cli@latest`. Intel Macs are excluded
+(`depends_on arch: :arm64` on macOS) because the SDK has no darwin-x64 binary.
+The tap builds no bottles: `brew install` runs `install` on the user's own
+machine every time.
+
+### What `install` does
+
+1. `npm install` of the release tarball into the keg's `libexec`, the standard
+   Homebrew way to install a Node CLI (`std_npm_args`).
+2. **Remove other platforms' SDK binaries.** `@dittolive/ditto` is one npm
+   package that ships a native binary for every platform it supports, so npm
+   installs all of them:
+
+   | File | Size |
+   | --- | --- |
+   | `node/ditto.darwin-arm64.node` | 88 MB |
+   | `node/ditto.linux-x64.node` | 112 MB |
+   | `node/ditto.linux-arm64.node` | 107 MB |
+   | `node/ditto.win32-x64.node` | 76 MB |
+   | `web/` (WebAssembly build, not used by dittosh) | 37 MB |
+
+   The SDK loads `ditto.<process.platform>-<process.arch>.node` and nothing
+   else. The formula works out the same name from Homebrew's own checks
+   (`OS.mac?` → `darwin` or `linux`, `Hardware::CPU.arm?` → `arm64` or `x64`),
+   keeps that file, and deletes the other three: roughly 270–300 MB, depending
+   on the platform. Installs end up around 150 MB on macOS and 180 MB on Linux,
+   instead of about 420 MB.
+   - If the expected file isn't there (an unsupported machine, or a future SDK
+     that lays its files out differently), nothing is deleted, so the install
+     still behaves exactly as npm left it.
+   - `web/` is kept on purpose, in case dittosh uses the WebAssembly build later.
+   - npm installs are unchanged and still include every platform. Fixing that
+     needs per-platform SDK packages (for example `@dittolive/ditto-darwin-arm64`
+     as optional dependencies), which only the SDK can publish.
+3. A `dittosh` wrapper in `bin` that puts Homebrew's Node.js 24 first on `PATH`.
+
+The formula's `test do` block checks `--version` and runs an offline
+`INSERT`/`SELECT`, which proves the kept binary loads.
+
+### How it's tested
+
+| Where | When | What |
+| --- | --- | --- |
+| `tests/unit/release.test.ts` | every CI run | The formula text, and its pruning code run with plain `ruby` against a fake install for macOS arm64, Linux x64, Linux arm64, and an unsupported machine (Homebrew's OS/CPU checks are stubbed). Skipped where `ruby` isn't installed. |
+| `npm run release:homebrew` | locally, before tagging | A real `brew install` of the release package on your Mac and in Linux arm64 and x64 containers. See below. |
+| Release workflow (`homebrew-install`) | after a tag is pushed, before publishing | A real `brew install`, `brew test`, offline DQL, install-channel detection, and the one-binary check (`scripts/release-smoke.ts homebrew`) on `macos-15`, `ubuntu-24.04`, and `ubuntu-24.04-arm`. Publishing waits for it. |
+
+### Test the formula locally
+
+```bash
+npm run release:homebrew                   # this Mac + Linux arm64 + Linux x64
+scripts/test-homebrew.sh mac               # only this Mac
+scripts/test-homebrew.sh linux             # only the Linux containers
+scripts/test-homebrew.sh mac --keep        # this Mac, and leave the install to try by hand
+```
+
+It needs the `.env` dev credentials (to stamp the release token), Homebrew on a
+Mac, and Docker for Linux (colima or Docker Desktop). Nothing is published.
+
+Step by step, on a Mac:
+
+1. Start Docker (for example `colima start`), unless you only run `mac`.
+2. Remove your own `dittosh`, unless you only run `linux`; Homebrew can't link
+   the test install over it:
+   ```bash
+   npm uninstall -g @dittolive/cli
+   ```
+3. Run the checks: `npm run release:homebrew` (several minutes, mostly the
+   emulated x64 container), or `scripts/test-homebrew.sh mac` / `linux` for
+   one part.
+4. Read the result. A pass ends with `Homebrew formula checks passed for
+   vX.Y.Z`, after a `PASS linux-arm64: …` and a `PASS linux-x64: …` line with
+   the installed size. A failure stops the run, with a `FAIL:` line or an
+   error saying what was wrong.
+5. Put your `dittosh` back: `scripts/install-release.sh`.
+
+To try the Homebrew-installed `dittosh` yourself, run step 3 as
+`scripts/test-homebrew.sh mac --keep`. After every check passes, it leaves the
+install and its tap in place and prints how to remove them. `dittosh version`
+then shows `channel  homebrew (/opt/homebrew)`. When you're done:
+
+```bash
+brew uninstall --formula getditto/release-smoke/dittosh && brew untap getditto/release-smoke
+scripts/install-release.sh   # your usual dittosh again
+```
+
+`--keep` applies only to the Mac check; a failed run is always cleaned up. The
+kept formula points at the test's local server, which has stopped, so
+`brew reinstall` of it won't work; run the script again instead.
+
+The script builds the release package and formula exactly as the release job
+does (`scripts/release.ts build`, into `build/release`), then:
+
+- **This Mac:** runs `scripts/release-smoke.ts homebrew`. It serves the package
+  from a local HTTP server, adds a temporary tap (`getditto/release-smoke`),
+  runs `brew install` and `brew test`, checks offline DQL, that `dittosh`
+  reports the `homebrew` install channel, and that only
+  `ditto.darwin-arm64.node` is left. It then uninstalls and removes the tap
+  (unless `--keep`).
+- **Linux arm64 and x64:** copies the package, the formula (pointed at a
+  `file://` URL), and `scripts/homebrew-linux-check.sh` to
+  `build/homebrew-linux`, and runs that check in a throwaway `homebrew/brew`
+  container for each platform. It updates Homebrew, installs and tests the
+  formula, and fails unless only `ditto.linux-<arch>.node` remains, `web/` is
+  intact, offline DQL works, and `dittosh` reports the `homebrew` channel.
+
+A passing run ends with `Homebrew formula checks passed for vX.Y.Z`, after a
+`PASS linux-arm64: …` and a `PASS linux-x64: …` line with the installed size.
+
+Things to know:
+
+- **Remove your own `dittosh` first** for the Mac check: if
+  `$(brew --prefix)/bin/dittosh` exists (an npm or Homebrew install), Homebrew
+  can't link the test install, and the script stops and says so. Remove it with
+  `npm uninstall -g @dittolive/cli` (or, for a kept test install, the
+  `brew uninstall`/`brew untap` commands above) and reinstall afterwards with
+  `scripts/install-release.sh`. The `linux` mode doesn't need this.
+- **It can upgrade your Homebrew packages.** Installing the formula installs or
+  upgrades `node@24` and its dependencies on your Mac if they're outdated.
+- **Linux x64 is emulated on Apple Silicon**, so it takes several minutes. The
+  emulator (QEMU) runs with `QEMU_CPU=max` so x64 code has the instructions it
+  needs, but `/proc/cpuinfo` inside the container still describes the ARM host,
+  and Homebrew refuses to run on x64 unless it lists `ssse3`. The script mounts
+  a stand-in `/proc/cpuinfo` for that container only. The formula and the SDK
+  binary run for real, but on emulated hardware; the release workflow's
+  `ubuntu-24.04` job is the real-x64 check.
+- **Files are staged under the repo** (`build/homebrew-linux`, gitignored), not
+  in `/tmp`: colima and Docker Desktop share only your home folder with
+  containers.
+- **The container runs `brew update` first**, because the image's Homebrew can
+  be too old to install current bottles (it fails with
+  `undefined method '[]' for nil`).
+- Docker settings aren't changed; the containers are removed when they finish.
 
 ## Stable releases, prereleases, and retries
 

@@ -31,6 +31,7 @@ describe("rewriteDefaultSubcommand", () => {
       "collections",
       "indexes",
       "dataset",
+      "bench",
       "delete-store",
       "import",
     ]) {
@@ -82,6 +83,16 @@ describe("rewriteDefaultSubcommand", () => {
       "reset",
       "--yes",
       "movies",
+    ]);
+  });
+
+  it("relocates flags before bench past it (dql -d X bench <stmt>)", () => {
+    expect(rewriteDefaultSubcommand(["dql", "-d", "/tmp/x", "bench", "SELECT 1"])).toEqual([
+      "dql",
+      "bench",
+      "-d",
+      "/tmp/x",
+      "SELECT 1",
     ]);
   });
 
@@ -265,6 +276,22 @@ describe("rewriteDefaultSubcommand", () => {
       "--verbose",
       "dql",
       "SELECT 1",
+    ]);
+  });
+
+  it("--debug is a global flag and support-bundle is a known subcommand", () => {
+    expect(rewriteDefaultSubcommand(["dql", "--debug", "SELECT 1"])).toEqual([
+      "--debug",
+      "dql",
+      "exec",
+      "SELECT 1",
+    ]);
+    expect(rewriteDefaultSubcommand(["dql", "-d", "/tmp/x", "support-bundle", "--list"])).toEqual([
+      "dql",
+      "support-bundle",
+      "-d",
+      "/tmp/x",
+      "--list",
     ]);
   });
 });

@@ -19,13 +19,15 @@ import {
 } from "../../../query/params.js";
 import { isBlankOrComments, splitComplete, splitStatements } from "../../../query/split.js";
 import { FormatError, resolveFormat } from "../../../render/output.js";
+import { configureDoctorCommand } from "../doctor.js";
 import { runBatch, stripDotCommandLines } from "./batch.js";
+import { registerBenchCommand } from "./bench.js";
 import { registerDatasetCommands } from "./dataset.js";
 import { deleteStore } from "./delete-store.js";
-import { collectDoctorChecks } from "./doctor.js";
 import { ImportError, importDocuments, isValidCollectionName, parseImportFile } from "./import.js";
 import { startRepl } from "./repl.js";
 import { note, runStatement, validateOutPath } from "./run.js";
+import { registerSupportBundleCommand } from "./support-bundle.js";
 
 interface ExecOpts {
   dataDir?: string;
@@ -49,7 +51,7 @@ interface ExecOpts {
 /** days until expiry at which the user gets a heads-up on every run. */
 const EXPIRY_NAG_DAYS = 14;
 
-async function openSession(opts: ExecOpts): Promise<DittoSession | null> {
+export async function openSession(opts: ExecOpts): Promise<DittoSession | null> {
   // Bogus data-dir values (commander artifacts like `-d --`) fail fast for
   // EVERY store-opening command. Mirror resolveDataDir's fallthrough: an
   // empty/whitespace flag means the env var wins — check the EFFECTIVE value.
@@ -149,21 +151,10 @@ export function registerDqlGroup(dql: ReturnType<Command["command"]>): void {
   dql.description("Run DQL statements against a local Ditto store");
 
   registerDatasetCommands(dql, { openSession });
+  registerBenchCommand(dql, { openSession });
 
-  dql
-    .command("doctor")
-    .description("Check platform, SDK, token, and data directory health")
-    .option("-d, --data-dir <path>", "override the data directory")
-    .action(async (opts: { dataDir?: string }) => {
-      const checks = await collectDoctorChecks(opts);
-      for (const c of checks) {
-        console.log(`${c.ok ? chalk.green("✓") : chalk.red("✗")} ${c.label} — ${c.detail}`);
-      }
-      const failures = checks.filter((c) => !c.ok).length;
-      // Spec: lock failures are their own exit code (4), everything else 3.
-      const lockFailed = checks.some((c) => c.label === "lock" && !c.ok);
-      process.exitCode = failures === 0 ? 0 : lockFailed ? 4 : 3;
-    });
+  configureDoctorCommand(dql.command("doctor"));
+  registerSupportBundleCommand(dql, { openSession });
 
   dql
     .command("collections")

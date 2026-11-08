@@ -35,7 +35,7 @@ Prereq: the release build is installed (`scripts/install-release.sh`).
   ```bash
   dittosh version --format json | jq -r .ditto_sdk
   ```
-  Expect: `5.1.0`.
+  Expect: `5.2.0`.
 
 - [ ] **Data dir is absolute and expandable**
   ```bash

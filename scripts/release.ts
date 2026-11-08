@@ -129,6 +129,17 @@ class Dittosh < Formula
 
   def install
     system "npm", "install", *std_npm_args
+    # The Ditto SDK ships a native binary for every platform (about 380 MB in all).
+    # Keep only the one Node loads on this machine (process.platform-arch);
+    # if that file isn't there, leave everything as installed.
+    target = "#{OS.mac? ? "darwin" : "linux"}-#{Hardware::CPU.arm? ? "arm64" : "x64"}"
+    Dir["#{libexec}/lib/node_modules/**/@dittolive/ditto/node"].each do |dir|
+      natives = Dir["#{dir}/ditto.*.node"]
+      keep = "#{dir}/ditto.#{target}.node"
+      next unless natives.include?(keep)
+
+      rm(natives - [keep])
+    end
     (bin/"dittosh").write_env_script libexec/"bin/dittosh", PATH: "#{Formula["node@24"].opt_bin}:#{HOMEBREW_PREFIX}/bin:$PATH"
   end
 

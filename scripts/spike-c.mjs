@@ -21,8 +21,9 @@ const ditto = await sdk.Ditto.open(
 );
 await ditto.setOfflineOnlyLicenseToken(token);
 
-// Seed some movies so the plan has real scans
-const docs = Array.from({ length: 200 }, (_, i) => ({
+// Seed enough movies that operators yield (SDK 5.1+ `#stats.yields`), plus a
+// small indexed `years` collection so a JOIN produces an `nlJoin.inner` subplan.
+const docs = Array.from({ length: 2000 }, (_, i) => ({
   _id: `m${i}`,
   title: i % 7 === 0 ? `Star Movie ${i}` : `Movie ${i}`,
   year: String(1950 + (i % 75)),
@@ -35,9 +36,17 @@ for (const d of docs) {
   });
 }
 
+for (let i = 0; i < 75; i++) {
+  await ditto.store.execute("INSERT INTO years DOCUMENTS (:doc) ON ID CONFLICT DO UPDATE", {
+    doc: { _id: `y${i}`, year: String(1950 + i), label: `Year ${1950 + i}` },
+  });
+}
+await ditto.store.execute("CREATE INDEX IF NOT EXISTS years_year ON years (year)");
+
 const queries = [
   "PROFILE SELECT * FROM movies WHERE rated = 'PG'",
   "PROFILE SELECT * FROM movies WHERE year > '2000' AND rated = 'R' ORDER BY year DESC LIMIT 10",
+  "PROFILE SELECT m._id, y.label FROM movies m JOIN years y ON m.year = y.year WHERE m.rated = 'G' LIMIT 50",
 ];
 const out = [];
 for (const q of queries) {
@@ -60,7 +69,7 @@ fs.rmSync(storeDir, { recursive: true, force: true });
 
 const fixture = {
   capturedAt: new Date().toISOString(),
-  sdkVersion: "5.1.0",
+  sdkVersion: sdk.Ditto.VERSION,
   profiles: out,
   explain: explainItems[0] ?? null,
 };

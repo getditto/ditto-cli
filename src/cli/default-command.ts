@@ -33,6 +33,8 @@ const DEFAULT_SUBCOMMANDS: Record<string, { exec: string; known: Set<string> }> 
       "collections",
       "indexes",
       "dataset",
+      "bench",
+      "support-bundle",
       "delete-store",
       "import",
       "help",
@@ -44,7 +46,7 @@ const DEFAULT_SUBCOMMANDS: Record<string, { exec: string; known: Set<string> }> 
 const DATASET_LEAVES = new Set(["list", "show", "load", "run", "reset"]);
 
 /** Global flags that may precede or follow the group token (boolean, no values). */
-const GLOBAL_FLAGS = new Set(["--no-color", "--quiet", "--no-update-check"]);
+const GLOBAL_FLAGS = new Set(["--no-color", "--quiet", "--no-update-check", "--debug"]);
 
 /** exec's value-taking flags (consume the next token); everything else is boolean or --flag=value. */
 const EXEC_VALUE_FLAGS = new Set([

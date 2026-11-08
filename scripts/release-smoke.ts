@@ -8,7 +8,11 @@ import { pathToFileURL } from "node:url";
 import { execa } from "execa";
 import { digest, formula, releaseVersion } from "./release.js";
 
-export async function smoke(mode: string, tag: string, native = true): Promise<void> {
+/**
+ * `keep` (homebrew mode only): after every check passes, leave the test install
+ * and its tap in place so it can be tried by hand. A failed run always cleans up.
+ */
+export async function smoke(mode: string, tag: string, native = true, keep = false): Promise<void> {
   const version = releaseVersion(tag);
   const archive = path.resolve(`build/release/dittolive-cli-${version}.tgz`);
   const checksum = digest(fs.readFileSync(archive));
@@ -77,6 +81,7 @@ export async function smoke(mode: string, tag: string, native = true): Promise<v
       const name = `${tap}/dittosh`;
       let tapped = false;
       let installed = false;
+      let passed = false;
       try {
         const source = path.join(temp, "tap");
         fs.mkdirSync(path.join(source, "Formula"), { recursive: true });
@@ -108,12 +113,31 @@ export async function smoke(mode: string, tag: string, native = true): Promise<v
             .stdout,
         );
         assert.match(info.channel, /^homebrew /);
+        // Only this platform's native SDK binary is kept.
+        const natives = fs
+          .readdirSync(path.join(prefix, "libexec"), { recursive: true, encoding: "utf8" })
+          .filter((f) => /ditto\.[^/\\]+\.node$/.test(f))
+          .map((f) => path.basename(f));
+        assert.deepEqual(natives, [`ditto.${process.platform}-${process.arch}.node`]);
         console.log(
-          `Homebrew install, offline DQL, and channel detection passed on ${process.platform}/${process.arch}`,
+          `Homebrew install, offline DQL, native binary pruning, and channel detection passed on ${process.platform}/${process.arch}`,
         );
+        passed = true;
       } finally {
-        if (installed) await execa("brew", ["uninstall", "--formula", name], { env });
-        if (tapped) await execa("brew", ["untap", tap], { env });
+        if (keep && passed) {
+          console.log(
+            [
+              "",
+              `Kept the Homebrew install: ${name} (${process.platform}/${process.arch}).`,
+              "Try it: dittosh version   (channel: homebrew)",
+              `Remove it: brew uninstall --formula ${name} && brew untap ${tap}`,
+              "Then reinstall your usual dittosh, e.g. scripts/install-release.sh",
+            ].join("\n"),
+          );
+        } else {
+          if (installed) await execa("brew", ["uninstall", "--formula", name], { env });
+          if (tapped) await execa("brew", ["untap", tap], { env });
+        }
         await new Promise<void>((resolve, reject) =>
           server.close((error) => (error ? reject(error) : resolve())),
         );
@@ -129,6 +153,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
     process.argv[2] ?? "",
     process.argv[3] ?? "",
     !process.argv.includes("--without-native"),
+    process.argv.includes("--keep"),
   ).catch((error) => {
     console.error(error);
     process.exitCode = 1;

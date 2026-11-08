@@ -1,12 +1,19 @@
 import chalk from "chalk";
 import type { Command } from "commander";
+import type { WarmupSetting } from "../../../bench/runner.js";
 import { loadDataset } from "../../../datasets/loader.js";
 import { DATASETS, getDataset, resolveQuery } from "../../../datasets/registry.js";
-import type { DatasetSuite } from "../../../datasets/types.js";
+import type { CatalogQuery, DatasetSuite } from "../../../datasets/types.js";
 import type { DittoSession } from "../../../ditto/session.js";
 import { ParamError, parsePositiveInt } from "../../../query/params.js";
-import { FormatError, renderRows, resolveFormat } from "../../../render/output.js";
+import {
+  FormatError,
+  type OutputFormat,
+  renderRows,
+  resolveFormat,
+} from "../../../render/output.js";
 import { renderTable } from "../../../render/table.js";
+import { parseRuns, parseWarmup, resolveBenchOutput, runBenchmarks } from "./bench.js";
 import { note, runStatement, validateOutPath } from "./run.js";
 
 const WRITE_CATEGORIES = new Set(["INSERT", "UPDATE", "DELETE", "EVICT", "UPSERT"]);
@@ -25,6 +32,85 @@ function printQueryCatalog(suite: DatasetSuite): void {
   for (const [category, names] of byCat) {
     console.log(`  ${chalk.bold(category)} (${names.length})`);
     for (const n of names) console.log(`    ${n}`);
+  }
+}
+
+/**
+ * `dataset run --runs/--warmup`: benchmark a catalog query. Setup follows the
+ * plain `dataset run` rules: write queries always run their fixtures
+ * (preQueries/resetQueries) and cleanup (postQueries); read queries run their
+ * index DDL only with --setup and keep the index afterwards.
+ */
+async function benchCatalogQuery(
+  queryName: string,
+  suite: DatasetSuite,
+  entry: CatalogQuery,
+  opts: {
+    setup: boolean;
+    dataDir?: string;
+    out?: string;
+    format?: string;
+    time?: boolean;
+    explain?: boolean;
+    profile?: boolean;
+    runs?: string;
+    warmup?: string | boolean;
+  },
+  command: Command,
+  deps: DatasetDeps,
+): Promise<void> {
+  let runs: number;
+  let warmup: WarmupSetting;
+  let format: OutputFormat;
+  try {
+    if (opts.explain || opts.profile || opts.time) {
+      throw new ParamError(
+        "--explain, --profile, and --time don't combine with --runs/--warmup (the benchmark reports its own timings)",
+      );
+    }
+    if (command.getOptionValueSource("maxRows") === "cli") {
+      throw new ParamError(
+        "--max-rows doesn't apply with --runs/--warmup (benchmarks don't print rows)",
+      );
+    }
+    runs = parseRuns(opts.runs, 1);
+    warmup = parseWarmup(opts.warmup) ?? 0;
+    format = resolveBenchOutput({ format: opts.format, out: opts.out });
+  } catch (err) {
+    if (err instanceof ParamError || err instanceof FormatError) {
+      console.error(chalk.red(err.message));
+      process.exitCode = err.exitCode;
+      return;
+    }
+    throw err;
+  }
+
+  const isWrite = WRITE_CATEGORIES.has(entry.category);
+  note(`Running ${chalk.bold(queryName)} (${suite.name}):`);
+  note(chalk.cyan(`  ${entry.query}`));
+  const knownIssue = suite.knownIssues?.[queryName];
+  if (knownIssue) console.error(chalk.yellow(`  ⚠ known issue: ${knownIssue}`));
+
+  const session = await deps.openSession({ dataDir: opts.dataDir });
+  if (!session) return;
+  try {
+    const { ok } = await runBenchmarks(
+      session,
+      [
+        {
+          name: queryName,
+          query: entry.query,
+          preQueries: isWrite || opts.setup ? (entry.preQueries ?? []) : [],
+          resetQueries: entry.resetQueries ?? [],
+          afterEachQueries: [],
+          postQueries: isWrite ? (entry.postQueries ?? []) : [],
+        },
+      ],
+      { runs, warmup, format, out: opts.out },
+    );
+    if (!ok) process.exitCode = 1;
+  } finally {
+    await session.close();
   }
 }
 
@@ -183,6 +269,11 @@ export function registerDatasetCommands(
     .option("--time", "print timing after the results", false)
     .option("--explain", "run EXPLAIN on the query and print the plan", false)
     .option("--profile", "run PROFILE on the query and print the execution profile", false)
+    .option("--runs <n>", "benchmark it: time this many runs and show p50/p95/p99")
+    .option(
+      "--warmup [n]",
+      "benchmark it: untimed runs first; with no number, enough to fill ~250 ms",
+    )
     .action(
       async (
         queryName: string,
@@ -197,6 +288,8 @@ export function registerDatasetCommands(
           time?: boolean;
           explain?: boolean;
           profile?: boolean;
+          runs?: string;
+          warmup?: string | boolean;
         },
         command: Command,
       ) => {
@@ -234,6 +327,11 @@ export function registerDatasetCommands(
           );
           console.error(chalk.dim(`  statement: ${entry.query}`));
           process.exitCode = 2;
+          return;
+        }
+
+        if (opts.runs !== undefined || opts.warmup !== undefined) {
+          await benchCatalogQuery(queryName, suite, entry, opts, command, deps);
           return;
         }
 

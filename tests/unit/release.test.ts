@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -116,7 +117,61 @@ describe("Homebrew release formula", () => {
     expect(source).toContain("#{HOMEBREW_PREFIX}/bin:$PATH");
     expect(source).toContain("SELECT answer FROM release_smoke");
     expect(source).not.toContain("depends_on :macos");
+    // Keeps only this machine's native SDK binary, never web/.
+    expect(source).toContain(
+      'target = "#{OS.mac? ? "darwin" : "linux"}-#{Hardware::CPU.arm? ? "arm64" : "x64"}"',
+    );
+    expect(source).toContain('Dir["#{dir}/ditto.*.node"]');
+    expect(source).toContain("next unless natives.include?(keep)");
   });
+  // Runs the formula's pruning code with plain Ruby against a fake install
+  // (Homebrew's OS/CPU checks stubbed), so a Ruby mistake shows up before a tag.
+  const hasRuby = spawnSync("ruby", ["-e", "exit 0"]).status === 0;
+  it.skipIf(!hasRuby).each([
+    ["mac", "arm", ["ditto.darwin-arm64.node"]],
+    ["linux", "x64", ["ditto.linux-x64.node"]],
+    ["linux", "arm", ["ditto.linux-arm64.node"]],
+    // Not a platform the SDK ships: nothing is deleted.
+    [
+      "mac",
+      "x64",
+      [
+        "ditto.darwin-arm64.node",
+        "ditto.linux-arm64.node",
+        "ditto.linux-x64.node",
+        "ditto.win32-x64.node",
+      ],
+    ],
+  ])("the formula keeps only the native SDK binary for %s/%s", (os_, cpu, kept) => {
+    const source = formula("1.2.3", "a".repeat(64));
+    const prune = source.slice(
+      source.indexOf("    target = "),
+      source.indexOf('    (bin/"dittosh")'),
+    );
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "dittosh-formula-"));
+    roots.push(root);
+    const sdk = path.join(root, "lib/node_modules/@dittolive/cli/node_modules/@dittolive/ditto");
+    fs.mkdirSync(path.join(sdk, "node"), { recursive: true });
+    fs.mkdirSync(path.join(sdk, "web"));
+    for (const t of ["darwin-arm64", "linux-x64", "linux-arm64", "win32-x64"]) {
+      fs.writeFileSync(path.join(sdk, `node/ditto.${t}.node`), "");
+    }
+    fs.writeFileSync(path.join(sdk, "node/ditto.cjs.js"), "");
+    const script = [
+      'require "fileutils"',
+      "include FileUtils",
+      `module OS; def self.mac? = ${os_ === "mac"}; end`,
+      `module Hardware; module CPU; def self.arm? = ${cpu === "arm"}; end; end`,
+      `libexec = ${JSON.stringify(root.replaceAll("\\", "/"))}`,
+      prune,
+    ].join("\n");
+    const r = spawnSync("ruby", ["-e", script], { encoding: "utf8" });
+    expect(r.stderr).toBe("");
+    expect(r.status).toBe(0);
+    expect(fs.readdirSync(path.join(sdk, "node")).sort()).toEqual(["ditto.cjs.js", ...kept].sort());
+    expect(fs.existsSync(path.join(sdk, "web"))).toBe(true);
+  });
+
   it("rejects injected Ruby and malformed source checksums", () => {
     expect(() => formula("1.2.3", "invalid")).toThrow();
     expect(() => formula('1.2.3"', "a".repeat(64))).toThrow();

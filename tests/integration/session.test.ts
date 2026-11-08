@@ -1,7 +1,9 @@
 import fs from "node:fs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { makeMetricsCommand } from "../../src/cli/groups/dql/metrics.js";
 import { DittoSession, LockError } from "../../src/ditto/session.js";
 import { loadIdentity } from "../../src/identity/token.js";
+import { buildSections, isExporterDisabled } from "../../src/metrics/system-metrics.js";
 import { classify, extractRows } from "../../src/query/execute.js";
 import { hasDevCredentials, NO_CREDENTIALS, rmrf, tmpDataDir } from "../helpers/credentials.js";
 
@@ -26,6 +28,24 @@ describe.skipIf(!hasDevCredentials)(`integration: DittoSession (${NO_CREDENTIALS
     const result = await session.execute("SELECT * FROM movies ORDER BY year");
     const rows = extractRows(result);
     expect(rows.map((r) => r.title)).toEqual(["Alien", "Blade Runner", "Toy Story"]);
+  });
+
+  it("exposes system:metrics (exporter enabled at open) with store and query series", async () => {
+    await session.execute("SELECT * FROM movies");
+    const rows = extractRows(await session.execute("SELECT * FROM system:metrics"));
+    expect(isExporterDisabled(rows)).toBe(false);
+    const ids = buildSections(rows).map((s) => s.id);
+    expect(ids).toContain("store");
+    expect(ids).toContain("query");
+  });
+
+  it(".metrics renders the store and query tables from the live store", async () => {
+    const metrics = makeMetricsCommand(session, { maxWidth: () => 120 });
+    const r = await metrics();
+    expect(r.ok).toBe(true);
+    expect(r.text).toContain("Store · counters");
+    expect(r.text).toContain("Query (DQL) · timings & distributions");
+    expect(r.text).toMatch(/requests/);
   });
 
   it("persists data across sessions in the same data dir", async () => {

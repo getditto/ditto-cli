@@ -8,7 +8,11 @@ export default defineConfig({
       include: ["src/**"],
       // The process entry point and the node:repl wiring are exercised by e2e
       // subprocess / pty tests, which v8 coverage cannot see — excluded deliberately.
-      exclude: ["src/cli/index.ts", "src/cli/groups/dql/repl.ts"],
+      exclude: [
+        "src/cli/index.ts",
+        "src/cli/groups/dql/repl.ts",
+        "src/cli/groups/tutorial-repl.ts",
+      ],
       // Hard gate (PM decision): coverage must stay at or above 85%.
       thresholds: { statements: 85, branches: 85, functions: 85, lines: 85 },
     },
