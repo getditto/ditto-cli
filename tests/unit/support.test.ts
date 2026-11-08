@@ -458,6 +458,15 @@ describe("collectReport", () => {
     expect(f.closed()).toBe(true);
   });
 
+  it("keeps table cells intact with pipes, backslashes, and newlines", async () => {
+    const r = await collectReport(
+      inputs({ environment: { path: "C:\\Users\\x\\|y", note: "a|b\nc" } }),
+    );
+    const md = renderReport(r);
+    expect(md).toContain("| path | C:\\Users\\x\\&#124;y |");
+    expect(md).toContain("| note | a&#124;b c |");
+  });
+
   it("renders empty stores and a last error without output", async () => {
     makeStoreDir();
     const f = fakeStore({ collections: [] });

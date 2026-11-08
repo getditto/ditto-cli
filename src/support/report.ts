@@ -266,7 +266,9 @@ export async function collectReport(inputs: ReportInputs): Promise<Report> {
   };
 }
 
-const cell = (s: string) => s.replace(/\|/g, "\\|").replace(/\n/g, " ");
+// `|` as an HTML entity: Markdown renders it as a pipe, it can't end a cell,
+// and backslashes (Windows paths) stay readable in the raw file.
+const cell = (s: string) => s.replace(/\|/g, "&#124;").replace(/\r?\n/g, " ");
 
 function table(rows: Record<string, string>): string {
   const lines = ["| | |", "|---|---|"];
