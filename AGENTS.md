@@ -43,7 +43,7 @@ npm run typecheck          # tsc --noEmit
 npm run lint               # biome check
 npm run spike:a            # SDK init/token/DQL smoke script
 scripts/install-release.sh # stamp token → RELEASE=true build → npm i -g . (installs `dittosh` globally)
-npm run release:homebrew   # real `brew install` of the release formula: this Mac + Linux arm64/x64 in Docker
+npm run release:homebrew   # real `brew install` of the release formula: this Mac + Linux arm64/x64 in Docker (`scripts/test-homebrew.sh mac --keep` leaves the Mac install to try)
 ```
 
 ## User phrasing worth knowing

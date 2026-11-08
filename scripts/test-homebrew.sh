@@ -3,21 +3,34 @@
 # `brew install` of the release package on this Mac, and in Linux arm64 and
 # x64 containers (Docker; x64 is emulated on Apple Silicon, so it takes longer).
 #
-#   scripts/test-homebrew.sh          # macOS (if on a Mac) + Linux arm64 + Linux x64
-#   scripts/test-homebrew.sh mac      # only this Mac
-#   scripts/test-homebrew.sh linux    # only the Linux containers
+#   scripts/test-homebrew.sh              # macOS (if on a Mac) + Linux arm64 + Linux x64
+#   scripts/test-homebrew.sh mac          # only this Mac
+#   scripts/test-homebrew.sh linux        # only the Linux containers
+#   scripts/test-homebrew.sh mac --keep   # leave the Mac's Homebrew install to try by hand
 #
 # Needs .env dev credentials (to stamp the release token). Nothing is published;
-# the macOS test removes its temporary tap and install when done.
+# the macOS test removes its temporary tap and install when done, unless --keep
+# is given and every check passed.
 set -euo pipefail
 cd "$(dirname "$0")/.." # repo root
 
-targets="${1:-all}"
-case "$targets" in all | mac | linux) ;; *)
-  echo "Usage: scripts/test-homebrew.sh [all|mac|linux]" >&2
+usage() {
+  echo "Usage: scripts/test-homebrew.sh [all|mac|linux] [--keep]" >&2
   exit 2
-  ;;
-esac
+}
+targets=all
+keep=()
+for arg in "$@"; do
+  case "$arg" in
+    all | mac | linux) targets="$arg" ;;
+    --keep) keep=(--keep) ;;
+    *) usage ;;
+  esac
+done
+if [[ ${#keep[@]} -gt 0 && ("$targets" == linux || "$(uname -s)" != Darwin) ]]; then
+  echo "--keep applies to the Mac check only (Linux containers are always removed)." >&2
+  exit 2
+fi
 version="$(node -p 'require("./package.json").version')"
 tag="v$version"
 
@@ -28,12 +41,13 @@ if [[ "$targets" != linux && "$(uname -s)" == Darwin ]]; then
   existing="$(brew --prefix)/bin/dittosh"
   if [[ -e "$existing" || -L "$existing" ]]; then
     echo "$existing already exists, so Homebrew can't link the test install." >&2
-    echo "Remove it first (npm uninstall -g @dittolive/cli, or brew uninstall dittosh)," >&2
+    echo "Remove it first: npm uninstall -g @dittolive/cli, or for a kept test install" >&2
+    echo "  brew uninstall --formula getditto/release-smoke/dittosh && brew untap getditto/release-smoke," >&2
     echo "then reinstall afterwards with scripts/install-release.sh." >&2
     exit 1
   fi
   HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_INSTALL_CLEANUP=1 \
-    node --import tsx scripts/release-smoke.ts homebrew "$tag"
+    node --import tsx scripts/release-smoke.ts homebrew "$tag" ${keep[@]+"${keep[@]}"}
 fi
 
 if [[ "$targets" != mac ]]; then

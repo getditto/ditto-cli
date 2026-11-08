@@ -141,10 +141,42 @@ The formula's `test do` block checks `--version` and runs an offline
 npm run release:homebrew                   # this Mac + Linux arm64 + Linux x64
 scripts/test-homebrew.sh mac               # only this Mac
 scripts/test-homebrew.sh linux             # only the Linux containers
+scripts/test-homebrew.sh mac --keep        # this Mac, and leave the install to try by hand
 ```
 
 It needs the `.env` dev credentials (to stamp the release token), Homebrew on a
 Mac, and Docker for Linux (colima or Docker Desktop). Nothing is published.
+
+Step by step, on a Mac:
+
+1. Start Docker (for example `colima start`), unless you only run `mac`.
+2. Remove your own `dittosh`, unless you only run `linux`; Homebrew can't link
+   the test install over it:
+   ```bash
+   npm uninstall -g @dittolive/cli
+   ```
+3. Run the checks: `npm run release:homebrew` (several minutes, mostly the
+   emulated x64 container), or `scripts/test-homebrew.sh mac` / `linux` for
+   one part.
+4. Read the result. A pass ends with `Homebrew formula checks passed for
+   vX.Y.Z`, after a `PASS linux-arm64: …` and a `PASS linux-x64: …` line with
+   the installed size. A failure stops the run, with a `FAIL:` line or an
+   error saying what was wrong.
+5. Put your `dittosh` back: `scripts/install-release.sh`.
+
+To try the Homebrew-installed `dittosh` yourself, run step 3 as
+`scripts/test-homebrew.sh mac --keep`. After every check passes, it leaves the
+install and its tap in place and prints how to remove them. `dittosh version`
+then shows `channel  homebrew (/opt/homebrew)`. When you're done:
+
+```bash
+brew uninstall --formula getditto/release-smoke/dittosh && brew untap getditto/release-smoke
+scripts/install-release.sh   # your usual dittosh again
+```
+
+`--keep` applies only to the Mac check; a failed run is always cleaned up. The
+kept formula points at the test's local server, which has stopped, so
+`brew reinstall` of it won't work; run the script again instead.
 
 The script builds the release package and formula exactly as the release job
 does (`scripts/release.ts build`, into `build/release`), then:
@@ -153,7 +185,8 @@ does (`scripts/release.ts build`, into `build/release`), then:
   from a local HTTP server, adds a temporary tap (`getditto/release-smoke`),
   runs `brew install` and `brew test`, checks offline DQL, that `dittosh`
   reports the `homebrew` install channel, and that only
-  `ditto.darwin-arm64.node` is left. It then uninstalls and removes the tap.
+  `ditto.darwin-arm64.node` is left. It then uninstalls and removes the tap
+  (unless `--keep`).
 - **Linux arm64 and x64:** copies the package, the formula (pointed at a
   `file://` URL), and `scripts/homebrew-linux-check.sh` to
   `build/homebrew-linux`, and runs that check in a throwaway `homebrew/brew`
@@ -169,9 +202,9 @@ Things to know:
 - **Remove your own `dittosh` first** for the Mac check: if
   `$(brew --prefix)/bin/dittosh` exists (an npm or Homebrew install), Homebrew
   can't link the test install, and the script stops and says so. Remove it with
-  `npm uninstall -g @dittolive/cli` (or `brew uninstall dittosh`) and reinstall
-  afterwards with `scripts/install-release.sh`. The `linux` mode doesn't need
-  this.
+  `npm uninstall -g @dittolive/cli` (or, for a kept test install, the
+  `brew uninstall`/`brew untap` commands above) and reinstall afterwards with
+  `scripts/install-release.sh`. The `linux` mode doesn't need this.
 - **It can upgrade your Homebrew packages.** Installing the formula installs or
   upgrades `node@24` and its dependencies on your Mac if they're outdated.
 - **Linux x64 is emulated on Apple Silicon**, so it takes several minutes. The
