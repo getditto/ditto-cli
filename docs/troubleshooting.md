@@ -41,8 +41,11 @@ It extracts into a single folder:
   directory and the files in it, and the executable path.
 - **Settings:** every `DITTOSH_*` variable, plus `NO_COLOR`, `FORCE_COLOR`, `CI`,
   `PAGER`, `LESS`, `TERM`, `TERM_PROGRAM`, `COLORTERM`, `LANG`, `LC_ALL`, and
-  `SHELL`. Credential variables (`OFFLINE_TOKEN`, `DATABASE_ID`, …) appear only as
-  "set" or "not set".
+  `SHELL`. Credential variables (`OFFLINE_TOKEN`, `DATABASE_ID`,
+  `DITTOSH_GITHUB_TOKEN`, and any variable whose name contains `TOKEN`, `SECRET`,
+  `PASSWORD`, `API_KEY`, `PRIVATE_KEY`, `LICENSE`, `CREDENTIAL`, or `AUTH`) appear only as "set" or "not set", and
+  their values are removed from everything else in the report, including the
+  saved last error.
 - **Store:** collection names with document counts, and index definitions. No
   document contents.
 - **Ditto SDK support bundle:** its size and when it was made, or why there isn't
@@ -59,10 +62,20 @@ Options:
 | `--no-sdk-bundle` | Leave out the Ditto SDK support bundle. |
 | `-d, --data-dir <path>` | The store to check and summarize. |
 
-The report never includes the license token or document contents. Your home
-folder is written as `~`. The command line in "Last error" is saved as typed,
-so a DQL statement with literal values shows those values. Extract the file
-(`tar -xzf dittosh-report-….tar.gz`) and read it before you share it.
+The report never includes the license token or document contents. In
+`report.md` and `report.json` your home folder is written as `~`. The command
+line in "Last error" is saved as typed, so a DQL statement with literal values
+shows those values.
+
+`ditto-support-bundle.tar` is Ditto's own file, included as is: its config and
+logs hold the database ID (which `report.md` shows only as "set"), full file
+paths including your home folder, peer keys, and sometimes values from
+queries the SDK planned with an index. Leave it out with `--no-sdk-bundle` if
+that matters for a public issue.
+
+`--report` never overwrites a file; given a directory, it writes the default
+name inside it. Extract the file (`tar -xzf dittosh-report-….tar.gz`) and read
+it before you share it.
 
 If the store doesn't exist yet, is locked, or won't open, the report says why
 and still includes everything else.
@@ -89,7 +102,8 @@ out. It's a plain `.tar`:
 | `dial9/dial9.bin.gz` | Runtime telemetry, when available. |
 | `bundle_errors.txt` | Present only if part of the bundle failed. |
 
-The SDK logs include file paths and peer keys.
+The SDK bundle isn't redacted by dittosh: the logs and config include the
+database ID, full file paths, and peer keys.
 
 To save only this bundle, for example when Ditto support asks for it:
 

@@ -745,8 +745,9 @@ The bundle holds:
 - The last failed command and the error it printed. dittosh saves this
   whenever a command fails, so you can make the report after the fact.
 - \`ditto-support-bundle.tar\`: Ditto's own support bundle, with the SDK's debug
-  logs and the store configuration (secrets removed). Leave it out with
-  \`--no-sdk-bundle\`, or save just this part with \`dittosh dql support-bundle\`.
+  logs and the store configuration, included as is. It holds the database ID,
+  full file paths, and peer keys. Leave it out with \`--no-sdk-bundle\`, or save
+  just this part with \`dittosh dql support-bundle\`.
 
 Extract the file and read it before you share it. To watch the SDK's logs
 while you reproduce a problem, add \`--debug\` to any command; the logs go to

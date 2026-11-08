@@ -106,7 +106,7 @@ export async function runBenchmarks(
     results.push(r);
   }
 
-  const rows = resultRows(results);
+  const rows = resultRows(results, opts.runs);
   if (opts.format === "json") process.env.DITTOSH_JSON_OUT = "1";
   if (opts.out) {
     const prev = chalk.level;

@@ -14,7 +14,7 @@ import {
   recordLastError,
   startStderrTail,
 } from "../../src/support/last-error.js";
-import { makeRedactor } from "../../src/support/redact.js";
+import { isSecretEnv, makeRedactor, secretEnvValues } from "../../src/support/redact.js";
 import {
   collectReport,
   collectSettings,
@@ -24,6 +24,7 @@ import {
   freeSpace,
   type ReportInputs,
   renderReport,
+  renderReportJson,
   type StoreSession,
 } from "../../src/support/report.js";
 import {
@@ -135,6 +136,30 @@ describe("makeRedactor", () => {
   it("does nothing without secrets or a usable home", () => {
     expect(makeRedactor({ home: "/" })("/a/b")).toBe("/a/b");
     expect(makeRedactor()("plain")).toBe("plain");
+  });
+});
+
+describe("credential env vars", () => {
+  it("recognizes credentials by list and by name", () => {
+    for (const k of [
+      "DITTOSH_GITHUB_TOKEN",
+      "OFFLINE_TOKEN",
+      "DATABASE_ID",
+      "DITTOSH_SOME_SECRET",
+      "MY_API_KEY",
+      "DITTOSH_PASSWORD",
+    ]) {
+      expect(isSecretEnv(k), k).toBe(true);
+    }
+    for (const k of ["DITTOSH_DATA_DIR", "DITTOSH_QUIET", "TERM", "PAGER"]) {
+      expect(isSecretEnv(k), k).toBe(false);
+    }
+  });
+
+  it("collects the values of set credential vars only", () => {
+    expect(
+      secretEnvValues({ DITTOSH_GITHUB_TOKEN: "ghp_x", OTHER: "y", EMPTY_TOKEN: "" }).sort(),
+    ).toEqual(["ghp_x"]);
   });
 });
 
@@ -312,6 +337,13 @@ describe("report helpers", () => {
     expect(s.DATABASE_ID).toBe("not set");
     expect(s).not.toHaveProperty("PATH");
     expect(JSON.stringify(s)).not.toContain("secret-token");
+    const t = collectSettings({
+      DITTOSH_GITHUB_TOKEN: "ghp_FAKEtoken1234567890",
+      DITTOSH_FUTURE_SECRET: "another-secret-value",
+    });
+    expect(t.DITTOSH_GITHUB_TOKEN).toBe("set (value hidden)");
+    expect(t.DITTOSH_FUTURE_SECRET).toBe("set (value hidden)");
+    expect(JSON.stringify(t)).not.toMatch(/ghp_FAKE|another-secret/);
   });
 });
 
@@ -486,6 +518,28 @@ describe("collectReport", () => {
   });
 });
 
+describe("renderReportJson", () => {
+  it("redacts Windows home paths and secrets that JSON would escape", () => {
+    const redact = makeRedactor({ home: "C:\\Users\\al", secrets: ['tok"en\\secret'] });
+    const report = {
+      generated: "t",
+      environment: { node: "C:\\Users\\al\\node.exe", note: 'value tok"en\\secret here' },
+      checks: [],
+      settings: {},
+      paths: { "data directory": "C:\\Users\\al\\AppData\\Local\\dittosh" },
+      store: {},
+      sdkBundle: { detail: "" },
+      lastError: null,
+    };
+    const json = renderReportJson(report, redact);
+    expect(json).not.toContain("Users");
+    expect(json).not.toContain("secret");
+    const parsed = JSON.parse(json);
+    expect(parsed.paths["data directory"]).toBe("~\\AppData\\Local\\dittosh");
+    expect(parsed.environment.note).toBe("value [redacted] here");
+  });
+});
+
 describe("writeArchive", () => {
   it("puts the files under one folder in a .tar.gz", async () => {
     const work = path.join(dir, "work");
@@ -498,5 +552,17 @@ describe("writeArchive", () => {
     const entries: string[] = [];
     await tar.t({ file: out, onReadEntry: (e) => entries.push(e.path) });
     expect(entries.sort()).toEqual(["r/", "r/report.json", "r/report.md"]);
+  });
+
+  it("works when the folder name matches a staged file (--report report.md)", async () => {
+    const work = path.join(dir, "work");
+    fs.mkdirSync(work);
+    fs.writeFileSync(path.join(work, "report.md"), "# hi");
+    fs.writeFileSync(path.join(work, "report.json"), "{}");
+    const out = path.join(dir, "report.md");
+    await writeArchive(out, work, "report.md", ["report.md", "report.json"]);
+    const entries: string[] = [];
+    await tar.t({ file: out, onReadEntry: (e) => entries.push(e.path) });
+    expect(entries.sort()).toEqual(["report.md/", "report.md/report.json", "report.md/report.md"]);
   });
 });

@@ -291,7 +291,30 @@ describe("runBenchmark", () => {
       warmup: 0,
       warn: (m) => warns.push(m),
     });
+    // An UPDATE does the same work every run (the --example samples use one).
+    await runBenchmark(
+      fakeSession().session,
+      spec({ query: "-- note\nUPDATE t SET x = 1 WHERE _id = 'a'" }),
+      { runs: 5, warmup: 2, warn: (m) => warns.push(m) },
+    );
     expect(warns).toEqual([]);
+  });
+
+  it("samples from --example never trigger the reset warning", async () => {
+    for (const d of DATASETS) {
+      for (const s of parseBenchFile(
+        JSON.stringify(exampleBenchFile(getDataset(d.name)!)),
+        d.name,
+      )) {
+        const warns: string[] = [];
+        await runBenchmark(fakeSession().session, s, {
+          runs: 5,
+          warmup: 2,
+          warn: (m) => warns.push(m),
+        });
+        expect(warns, `${d.name}/${s.name}`).toEqual([]);
+      }
+    }
   });
 
   it("rethrows errors that aren't from a statement", async () => {
@@ -313,11 +336,13 @@ describe("resultRows", () => {
   });
 
   it("one run shows just the time", () => {
-    expect(resultRows([ok("a", [1.23456])])).toEqual([{ benchmark: "a", rows: 4, time_ms: 1.235 }]);
+    expect(resultRows([ok("a", [1.23456])], 1)).toEqual([
+      { benchmark: "a", rows: 4, time_ms: 1.235 },
+    ]);
   });
 
   it("several runs show the distribution", () => {
-    const [row] = resultRows([ok("a", [1, 2, 3, 4])]);
+    const [row] = resultRows([ok("a", [1, 2, 3, 4])], 4);
     expect(Object.keys(row!)).toEqual([
       "benchmark",
       "runs",
@@ -347,15 +372,28 @@ describe("resultRows", () => {
       ok: false,
       cleanupFailures: [{ statement: "y", error: "e" }],
     };
-    const rows = resultRows([ok("a", [1, 2]), failed, cleanup]);
+    const rows = resultRows([ok("a", [1, 2]), failed, cleanup], 2);
     expect(rows.map((r) => r.status)).toEqual(["ok", "failed (pre)", "cleanup failed"]);
     expect(rows[1]!.p95_ms).toBeNull();
-    expect(resultRows([failed])[0]).toEqual({
+    expect(resultRows([failed], 1)[0]).toEqual({
       benchmark: "b",
       status: "failed (pre)",
       rows: 4,
       time_ms: null,
     });
+  });
+
+  it("keeps the distribution columns when every benchmark failed early", () => {
+    const failed = {
+      ...ok("b", []),
+      ok: false,
+      stats: undefined,
+      runs: 0,
+      failure: { stage: "warmup" as const, statement: "x", error: "e" },
+    };
+    const [row] = resultRows([failed], 5);
+    expect(row).toMatchObject({ status: "failed (warmup)", runs: 0, p95_ms: null });
+    expect(row).not.toHaveProperty("time_ms");
   });
 });
 

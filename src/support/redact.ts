@@ -39,6 +39,22 @@ export const SECRET_ENV = [
   "DQL_OFFLINE_LICENSE",
   "DATABASE_ID",
   "DITTO_APP_ID",
+  "DITTOSH_GITHUB_TOKEN",
   "GITHUB_TOKEN",
   "GH_TOKEN",
 ];
+
+/** Names that look like credentials (e.g. a future DITTOSH_*_TOKEN), hidden too. */
+const SECRET_NAME = /TOKEN|SECRET|PASSWORD|PASSWD|LICENSE|CREDENTIAL|API_?KEY|PRIVATE_?KEY|AUTH/i;
+
+/** True for an env var whose value must never appear in a report. */
+export function isSecretEnv(name: string): boolean {
+  return SECRET_ENV.includes(name) || SECRET_NAME.test(name);
+}
+
+/** Values of every credential-like env var, for the redactor to scrub anywhere. */
+export function secretEnvValues(env: NodeJS.ProcessEnv = process.env): string[] {
+  return Object.entries(env)
+    .filter(([k, v]) => v && isSecretEnv(k))
+    .map(([, v]) => v as string);
+}

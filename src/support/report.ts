@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import type { DoctorCheck } from "../cli/groups/dql/doctor.js";
 import type { LastError } from "./last-error.js";
-import { SECRET_ENV } from "./redact.js";
+import { isSecretEnv, SECRET_ENV } from "./redact.js";
 import type { BundleSession, SavedBundle } from "./sdk-bundle.js";
 
 /** Everything `doctor --report` gathers. Plain data: rendered to Markdown and JSON. */
@@ -124,7 +124,10 @@ export function collectSettings(env: NodeJS.ProcessEnv): Record<string, string> 
       .sort(),
     ...SETTINGS_ENV,
   ];
-  for (const k of names) if (env[k] !== undefined) out[k] = env[k] ?? "";
+  for (const k of names) {
+    if (env[k] === undefined) continue;
+    out[k] = isSecretEnv(k) ? "set (value hidden)" : (env[k] ?? "");
+  }
   for (const k of SECRET_ENV) out[k] = env[k] ? "set (value hidden)" : "not set";
   return out;
 }
@@ -332,6 +335,14 @@ export function renderReport(r: Report): string {
   return `${out.join("\n").trimEnd()}\n`;
 }
 
+/**
+ * report.json, redacted string by string before encoding: JSON doubles
+ * backslashes, so a Windows home path wouldn't match once encoded.
+ */
+export function renderReportJson(r: Report, redact: (s: string) => string): string {
+  return `${JSON.stringify(r, (_key, value) => (typeof value === "string" ? redact(value) : value), 2)}\n`;
+}
+
 /** What the bundle contains, for the note printed after writing it. */
 export function describeContents(r: Report): string[] {
   const items = [
@@ -343,7 +354,7 @@ export function describeContents(r: Report): string[] {
     items.push(`last error: the failed command line and its error output (${r.lastError.time})`);
   if (r.sdkBundle.file)
     items.push(
-      `${r.sdkBundle.file}: Ditto's support bundle (SDK debug logs, store config with secrets removed; logs include file paths and peer keys)`,
+      `${r.sdkBundle.file}: Ditto's support bundle, included as is (SDK debug logs and store config; holds the database ID, full file paths, and peer keys)`,
     );
   return items;
 }

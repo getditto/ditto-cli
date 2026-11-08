@@ -8,12 +8,13 @@ import type { Identity } from "../../identity/token.js";
 import { daysUntilExpiry, loadIdentity } from "../../identity/token.js";
 import { writeArchive } from "../../support/archive.js";
 import { readLastError } from "../../support/last-error.js";
-import { makeRedactor, SECRET_ENV } from "../../support/redact.js";
+import { makeRedactor, secretEnvValues } from "../../support/redact.js";
 import {
   collectReport,
   describeContents,
   formatBytes,
   renderReport,
+  renderReportJson,
   type StoreSession,
 } from "../../support/report.js";
 import { saveSupportBundle } from "../../support/sdk-bundle.js";
@@ -87,21 +88,38 @@ function versionFacts(deps: DoctorDeps): { facts: Record<string, string>; identi
 }
 
 /** Write the report bundle; returns its path. Status lines go to stderr. */
+/** A bad `--report` path: a usage error (exit 2). */
+export class ReportPathError extends Error {
+  readonly exitCode = 2;
+}
+
+/**
+ * Where `--report` writes: the given file, the default name inside a given
+ * directory, or the default name in the current directory. Never overwrites.
+ */
+export function resolveReportPath(report: string | boolean | undefined, now: Date): string {
+  const given = typeof report === "string" && report.trim() ? report : undefined;
+  let out = path.resolve(expandTilde(given ?? defaultReportName(now)));
+  if (given && fs.existsSync(out) && fs.statSync(out).isDirectory()) {
+    out = path.join(out, defaultReportName(now));
+  }
+  if (fs.existsSync(out)) {
+    throw new ReportPathError(`${out} already exists; choose another name with --report <file>`);
+  }
+  return out;
+}
+
 export async function writeReport(
   opts: DoctorOpts,
   checks: DoctorCheck[],
   deps: DoctorDeps,
+  out: string = resolveReportPath(opts.report, deps.now()),
 ): Promise<string> {
   const now = deps.now();
-  const out = path.resolve(
-    expandTilde(
-      typeof opts.report === "string" && opts.report.trim() ? opts.report : defaultReportName(now),
-    ),
-  );
   const dataDir = resolveDataDir(opts.dataDir);
   const { facts, identity } = versionFacts(deps);
   const redact = makeRedactor({
-    secrets: [identity?.token, ...SECRET_ENV.map((k) => process.env[k])],
+    secrets: [identity?.token, ...secretEnvValues()],
   });
 
   const work = fs.mkdtempSync(path.join(os.tmpdir(), "dittosh-report-"));
@@ -130,11 +148,7 @@ export async function writeReport(
       now: () => now,
     });
     fs.writeFileSync(path.join(work, "report.md"), redact(renderReport(report)), "utf8");
-    fs.writeFileSync(
-      path.join(work, "report.json"),
-      `${redact(JSON.stringify(report, null, 2))}\n`,
-      "utf8",
-    );
+    fs.writeFileSync(path.join(work, "report.json"), renderReportJson(report, redact), "utf8");
     const files = ["report.md", "report.json"];
     if (report.sdkBundle.file) files.push(report.sdkBundle.file);
     const folder = path.basename(out).replace(/\.tar\.gz$|\.tgz$/, "") || "dittosh-report";
@@ -173,7 +187,10 @@ export function configureDoctorCommand(cmd: Command, deps: DoctorDeps = realDoct
 The report bundle holds versions, OS and terminal details, these checks, paths
 and free space, dittosh settings (credentials only as set/not set), a store
 summary (no document contents), the last failed command, and a Ditto SDK
-support bundle with the SDK's debug logs. Your home folder is shown as ~.
+support bundle. In report.md and report.json your home folder is shown as ~.
+The SDK bundle is Ditto's own file, included as is: its logs and config hold
+the database ID, full file paths, and peer keys (--no-sdk-bundle leaves it out).
+The license token is never included.
 
 Examples:
   dittosh doctor
@@ -182,6 +199,18 @@ Examples:
   dittosh dql support-bundle          # only the Ditto SDK support bundle`,
     )
     .action(async (opts: DoctorOpts) => {
+      // A bad --report path is a usage error: report it before doing any work.
+      let out: string | undefined;
+      if (opts.report !== undefined) {
+        try {
+          out = resolveReportPath(opts.report, deps.now());
+        } catch (err) {
+          if (!(err instanceof ReportPathError)) throw err;
+          console.error(chalk.red(err.message));
+          process.exitCode = 2;
+          return;
+        }
+      }
       const checks = await deps.collectChecks({ dataDir: opts.dataDir });
       for (const c of checks) {
         console.log(`${c.ok ? chalk.green("✓") : chalk.red("✗")} ${c.label} — ${c.detail}`);
@@ -191,9 +220,9 @@ Examples:
       const lockFailed = checks.some((c) => c.label === "lock" && !c.ok);
       process.exitCode = failures === 0 ? 0 : lockFailed ? 4 : 3;
 
-      if (opts.report !== undefined) {
+      if (out !== undefined) {
         try {
-          await writeReport(opts, checks, deps);
+          await writeReport(opts, checks, deps, out);
         } catch (err) {
           console.error(chalk.red(`Could not write the report: ${(err as Error).message}`));
           process.exitCode = 1;

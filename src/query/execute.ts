@@ -30,10 +30,14 @@ function stripLeadingTrivia(s: string): string {
   }
 }
 
+/** The statement's first keyword, upper-cased (after comments and whitespace). */
+export function firstKeyword(statement: string): string | undefined {
+  return /^([a-zA-Z]+)/.exec(stripLeadingTrivia(statement))?.[1]?.toUpperCase();
+}
+
 /** Classify a DQL statement by its first meaningful keyword. */
 export function classify(statement: string): StatementKind {
-  const word = /^([a-zA-Z]+)/.exec(stripLeadingTrivia(statement))?.[1]?.toUpperCase();
-  switch (word) {
+  switch (firstKeyword(statement)) {
     case "SELECT":
       return "select";
     case "EXPLAIN":

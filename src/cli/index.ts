@@ -2,7 +2,7 @@ import chalk from "chalk";
 import { Command, CommanderError } from "commander";
 import { sdkDebugLevel } from "../ditto/session.js";
 import { isDiagnosticCommand, recordLastError, startStderrTail } from "../support/last-error.js";
-import { makeRedactor, SECRET_ENV } from "../support/redact.js";
+import { makeRedactor, secretEnvValues } from "../support/redact.js";
 import { rewriteDefaultSubcommand } from "./default-command.js";
 import { configureDoctorCommand } from "./groups/doctor.js";
 import { openSession, registerDqlGroup } from "./groups/dql/index.js";
@@ -98,7 +98,7 @@ try {
 const argv = process.argv.slice(2);
 const exitCode = Number(process.exitCode ?? 0);
 if (exitCode !== 0 && exitCode !== 2 && !isDiagnosticCommand(argv)) {
-  const redact = makeRedactor({ secrets: SECRET_ENV.map((k) => process.env[k]) });
+  const redact = makeRedactor({ secrets: secretEnvValues() });
   recordLastError({
     time: new Date().toISOString(),
     version: CLI_VERSION,

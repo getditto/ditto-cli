@@ -178,6 +178,32 @@ describe("dittosh doctor", () => {
     expect(stdout()).not.toContain("Wrote"); // status stays off stdout
   });
 
+  it("--report never contains DITTOSH_GITHUB_TOKEN or other credential-like values", async () => {
+    const gh = "ghp_FAKEtoken1234567890abcdef";
+    const other = "zz-some-future-secret-value";
+    process.env.DITTOSH_GITHUB_TOKEN = gh;
+    process.env.DITTOSH_FUTURE_SECRET = other;
+    const store = makeStore();
+    recordLastError(
+      {
+        time: "2026-11-07T08:00:00Z",
+        version: "0.2.0",
+        command: ["skills", "add", "x"],
+        exitCode: 1,
+        stderr: [`auth failed with ${gh}`],
+      },
+      path.join(dir, "cfg"),
+    );
+    const out = path.join(dir, "r.tar.gz");
+    await runDoctor(deps(OK), "-d", store, "--report", out);
+    const all = [...(await entries(out)).values()].join("\n");
+    expect(all).not.toContain(gh);
+    expect(all).not.toContain(other);
+    expect(all).toContain("| DITTOSH_GITHUB_TOKEN | set (value hidden) |");
+    expect(all).toContain("| DITTOSH_FUTURE_SECRET | set (value hidden) |");
+    expect(all).toContain("auth failed with [redacted]");
+  });
+
   it("--report with no file name uses a timestamped name in the current folder", async () => {
     const cwd = process.cwd();
     process.chdir(dir);
@@ -212,6 +238,36 @@ describe("dittosh doctor", () => {
     const md = (await entries(out)).get("r/report.md")!;
     expect(md).toMatch(/\| token expires \| unavailable/);
     expect(md).toContain("no license token loaded");
+  });
+
+  it("refuses to overwrite a file, before running any checks (exit 2)", async () => {
+    const out = path.join(dir, "existing.tar.gz");
+    fs.writeFileSync(out, "keep");
+    let ran = false;
+    const d = {
+      ...deps(OK),
+      collectChecks: async () => {
+        ran = true;
+        return OK;
+      },
+    };
+    await runDoctor(d, "--report", out);
+    expect(process.exitCode).toBe(2);
+    expect(ran).toBe(false);
+    expect(fs.readFileSync(out, "utf8")).toBe("keep");
+    expect(stderr()).toContain("already exists");
+  });
+
+  it("given a directory, writes the default name inside it", async () => {
+    await runDoctor(deps(OK), "-d", path.join(dir, "none"), "--report", dir, "--no-sdk-bundle");
+    expect(fs.existsSync(path.join(dir, "dittosh-report-20261107-090503.tar.gz"))).toBe(true);
+  });
+
+  it("accepts a file named like an entry inside the archive", async () => {
+    const out = path.join(dir, "report.md");
+    await runDoctor(deps(OK), "-d", path.join(dir, "none"), "--report", out, "--no-sdk-bundle");
+    expect(process.exitCode).toBe(0);
+    expect([...(await entries(out)).keys()]).toContain("report.md/report.md");
   });
 
   it("exits 1 when the report can't be written", async () => {

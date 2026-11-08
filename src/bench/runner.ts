@@ -1,5 +1,5 @@
 import type { QueryExecutor } from "../ditto/session.js";
-import { classify } from "../query/execute.js";
+import { classify, firstKeyword } from "../query/execute.js";
 import type { BenchSpec } from "./spec.js";
 import { computeStats, decideWarmup, type Stats } from "./stats.js";
 
@@ -78,8 +78,15 @@ export async function runBenchmark(
     samples: [],
   };
 
+  // An UPDATE does the same work on every run; an INSERT, EVICT, or DELETE
+  // usually fails or finds nothing after the first unless the data is put back.
   const executions = opts.runs + (opts.warmup === "auto" ? 1 : opts.warmup);
-  if (classify(spec.query) === "mutation" && spec.resetQueries.length === 0 && executions > 1) {
+  if (
+    classify(spec.query) === "mutation" &&
+    firstKeyword(spec.query) !== "UPDATE" &&
+    spec.resetQueries.length === 0 &&
+    executions > 1
+  ) {
     opts.warn?.(
       `${spec.name}: this write has no resetQueries, so runs after the first may change nothing (or fail). Put the data back before each run with resetQueries (--before-each on the command line).`,
     );
@@ -141,12 +148,13 @@ export async function runBenchmark(
 const ms = (n: number) => Number(n.toFixed(3));
 
 /**
- * Result rows for rendering (table, JSON, CSV…). One timed run per benchmark
- * shows just its time; more runs show the distribution.
+ * Result rows for rendering (table, JSON, CSV…). One requested run shows just
+ * its time; more show the distribution. The columns follow the requested
+ * `runs`, not the completed ones, so a failure doesn't change the shape.
  */
-export function resultRows(results: BenchResult[]): Record<string, unknown>[] {
+export function resultRows(results: BenchResult[], runs: number): Record<string, unknown>[] {
   const anyFailed = results.some((r) => !r.ok);
-  const distribution = results.some((r) => r.runs > 1);
+  const distribution = runs > 1;
   return results.map((r) => {
     const row: Record<string, unknown> = { benchmark: r.name };
     if (anyFailed) {

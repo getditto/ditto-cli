@@ -13,8 +13,9 @@ body:
 
         It writes `dittosh-report-<time>.tar.gz` in the current folder, with versions, OS details,
         health checks, the last failed command, a store summary (no document contents), and Ditto's
-        SDK support bundle (SDK debug logs). Credentials are never included. Extract it and read it
-        before attaching it. Leave parts out with `--no-store` or `--no-sdk-bundle`.
+        SDK support bundle (SDK debug logs). The license token is never included. The SDK bundle is
+        Ditto's own file and holds the database ID, full file paths, and peer keys. Extract it and
+        read it before attaching it. Leave parts out with `--no-store` or `--no-sdk-bundle`.
   - type: textarea
     id: what
     attributes:

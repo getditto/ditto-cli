@@ -76,9 +76,10 @@ stderr, the post statements still run, and the result row is marked failed. Othe
 benchmarks in the file still run. The command exits 1 if any benchmark (or any
 post statement) failed, and 2 for usage errors such as a bad file.
 
-A write benchmark that runs more than once with no `resetQueries` gets a warning:
-after the first run, an `EVICT` or `DELETE` usually finds nothing to remove, and
-an `INSERT` of a fixed `_id` fails or does nothing.
+An `INSERT`, `EVICT`, or `DELETE` benchmark that runs more than once with no
+`resetQueries` gets a warning: after the first run, an `EVICT` or `DELETE` usually
+finds nothing to remove, and an `INSERT` of a fixed `_id` fails or does nothing.
+An `UPDATE` does the same work on every run, so it needs no reset.
 
 ## The benchmark file format
 
