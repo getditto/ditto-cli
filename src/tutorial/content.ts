@@ -454,11 +454,15 @@ Each run inserts \`bench-doc\` (untimed) and then evicts it (timed), so every ru
 measures a real eviction, and the store ends as it started.
 
 To time an insert instead, undo it after every run with \`--after-each\` (also
-untimed), so the next run can insert the same document again:
+untimed), so the next run can insert the same document again. The \`--pre\` evict
+clears a \`bench-doc\` left over from an interrupted run, and the \`--post\` evict
+removes it if a run fails before its undo:
 `),
         sh(`
 dittosh dql bench "INSERT INTO movies VALUES ({'_id': 'bench-doc', 'rated': 'TEST'})" --runs 10 \\
-  --after-each "EVICT FROM movies WHERE _id = 'bench-doc'"
+  --pre "EVICT FROM movies WHERE _id = 'bench-doc'" \\
+  --after-each "EVICT FROM movies WHERE _id = 'bench-doc'" \\
+  --post "EVICT FROM movies WHERE _id = 'bench-doc'"
 `),
         text(`
 \`--pre\`, \`--before-each\` (also spelled \`--reset\`), \`--after-each\`, and

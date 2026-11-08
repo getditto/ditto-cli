@@ -98,13 +98,16 @@ export async function runBenchmark(
   const reset = async () => {
     for (const s of spec.resetQueries) await exec(session, "reset", s);
   };
+  // `ms` times the query alone; `iterationMs` also counts the untimed reset
+  // and after-each statements, so auto warmup stays near its wall-time budget.
   const timed = async (stage: BenchStage) => {
+    const iterationStart = now();
     await reset();
     const started = now();
     const r = await exec(session, stage, spec.query);
     const ms = now() - started;
     for (const s of spec.afterEachQueries) await exec(session, "after-each", s);
-    return { ms, rows: r.items.length };
+    return { ms, iterationMs: now() - iterationStart, rows: r.items.length };
   };
 
   try {
@@ -113,7 +116,7 @@ export async function runBenchmark(
     if (opts.warmup === "auto") {
       const pilot = await timed("warmup");
       result.warmup = 1;
-      const target = decideWarmup(pilot.ms);
+      const target = decideWarmup(pilot.iterationMs);
       while (result.warmup < target) {
         await timed("warmup");
         result.warmup++;

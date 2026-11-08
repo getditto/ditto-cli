@@ -218,6 +218,7 @@ Examples:
   dittosh dql bench "EVICT FROM movies WHERE _id = 'bench-doc'" \\
     --before-each "INSERT INTO movies VALUES ({'_id': 'bench-doc'})"
   dittosh dql bench "INSERT INTO movies VALUES ({'_id': 'bench-doc'})" \\
+    --pre "EVICT FROM movies WHERE _id = 'bench-doc'" \\
     --after-each "EVICT FROM movies WHERE _id = 'bench-doc'"
   dittosh dql bench --example retail -o retail-bench.json
   dittosh dql bench -f retail-bench.json --runs 50 --warmup`,

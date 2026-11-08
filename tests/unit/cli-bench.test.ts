@@ -236,6 +236,28 @@ describe("dittosh dql bench", () => {
     expect(json()[0].status).toBe("failed (query)");
   });
 
+  it("a failing --after-each statement exits 1, names the stage, and still cleans up", async () => {
+    h.failPattern = /^EVICT/;
+    await run(
+      "bench",
+      "INSERT INTO t VALUES ({'_id': 'x'})",
+      "--after-each",
+      "EVICT FROM t WHERE _id = 'x'",
+      "--post",
+      "DROP INDEX i ON t",
+      "--runs",
+      "2",
+      "-d",
+      dir,
+      "--format",
+      "json",
+    );
+    expect(process.exitCode).toBe(1);
+    expect(stderr()).toContain("failed in after-each: injected failure");
+    expect(h.calls.at(-1)).toBe("DROP INDEX i ON t");
+    expect(json()[0].status).toBe("failed (after-each)");
+  });
+
   it("a failing cleanup statement is reported and exits 1", async () => {
     h.failPattern = /^DROP/;
     await run(

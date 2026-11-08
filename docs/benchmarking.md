@@ -63,8 +63,14 @@ inserts the same document again:
 
 ```bash
 dittosh dql bench "INSERT INTO movies VALUES ({'_id': 'bench-doc', 'rated': 'TEST'})" --runs 50 \
-  --after-each "EVICT FROM movies WHERE _id = 'bench-doc'"
+  --pre "EVICT FROM movies WHERE _id = 'bench-doc'" \
+  --after-each "EVICT FROM movies WHERE _id = 'bench-doc'" \
+  --post "EVICT FROM movies WHERE _id = 'bench-doc'"
 ```
+
+The `--pre` evict clears a `bench-doc` left behind by an interrupted run (for
+example Ctrl-C between the insert and its undo); without it, the first insert
+would fail. The `--post` evict removes it if a run fails before its undo.
 
 `--before-each` and `--after-each` can be used together; neither is included in
 the timings.
@@ -78,11 +84,13 @@ For each benchmark:
    `afterEachQueries` after each run.
    The first run of a query pays for cold caches and query planning; warmup keeps
    that out of the numbers. With auto warmup, the first warmup run is timed to decide
-   how many more fit in 250 ms.
+   how many more fit in 250 ms; that first run's time includes its `resetQueries`
+   and `afterEachQueries`, so slow ones mean fewer warmup runs.
 3. **Timed runs**: `resetQueries` run (untimed), then the query runs and its time is
    recorded, then `afterEachQueries` run (untimed). This repeats `--runs` times.
-   `afterEachQueries` run only after the query succeeds; if it fails, the
-   benchmark stops and `postQueries` clean up.
+   If the query fails, `afterEachQueries` are skipped, the benchmark stops, and
+   `postQueries` clean up. If an `afterEachQueries` statement fails, the benchmark
+   stops the same way, and that run doesn't count toward the results.
 4. **`postQueries`** run once, **even if an earlier step failed**. Typical use:
    `DROP INDEX`, removing test documents.
 
@@ -159,9 +167,11 @@ Two other shapes are accepted:
      `postQueries`. Start `preQueries` with `DROP INDEX IF EXISTS …` so a leftover
      index from an interrupted run doesn't fail the `CREATE INDEX`.
    - A write: make every run do the same work. Use `resetQueries` to put the data
-     back before each run. For example, re-insert the document an `EVICT` removes,
-     or evict the document an `INSERT` adds. Use `postQueries` to remove test
-     documents at the end.
+     back before each run (for example, re-insert the document an `EVICT`
+     removes), or `afterEachQueries` to undo the write after each run (for
+     example, evict the document an `INSERT` adds). Use `postQueries` to remove
+     test documents at the end, and `preQueries` to clear any left over from an
+     interrupted run.
    - Use `_id`s that can't collide with real data, such as `bench-…`.
 4. **Check that the store ends as it started.** Compare
    `dittosh dql "SELECT count(*) FROM <collection>"` and `dittosh dql indexes` before

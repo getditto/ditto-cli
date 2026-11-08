@@ -71,6 +71,36 @@ describe.skipIf(!hasDevCredentials)(`e2e: dittosh dql bench (${NO_CREDENTIALS})`
     });
   });
 
+  it("--after-each undoes an insert after every run and leaves the store clean", async () => {
+    const insert = "INSERT INTO locations VALUES ({'_id': 'bench-e2e', 'name': 'x'})";
+    const undo = "EVICT FROM locations WHERE _id = 'bench-e2e'";
+    const r = await cli([
+      "dql",
+      "bench",
+      insert,
+      "--runs",
+      "5",
+      "--warmup",
+      "2",
+      "--pre",
+      undo,
+      "--after-each",
+      undo,
+      "-d",
+      dir,
+    ]);
+    expect(r.exitCode).toBe(0);
+    expect(r.stderr).not.toContain("no resetQueries");
+    expect(JSON.parse(r.stdout)[0]).toMatchObject({ runs: 5, warmup: 2 });
+    const left = await cli([
+      "dql",
+      "SELECT count(*) AS n FROM locations WHERE _id = 'bench-e2e'",
+      "-d",
+      dir,
+    ]);
+    expect(JSON.parse(left.stdout)[0].n).toBe(0);
+  });
+
   it("exits 1 when the query fails and 2 for usage errors", async () => {
     const bad = await cli(["dql", "bench", "SELECT * FROM", "--runs", "2", "-d", dir]);
     expect(bad.exitCode).toBe(1);

@@ -70,6 +70,9 @@ additional features merged before that tag is created.
 - Homebrew formula installation, offline DQL, and install-channel detection on
   macOS arm64 and Linux x64/arm64. Before npm publication, a temporary local
   HTTP server supplies the same package bytes to the test formula.
+- The formula deletes the Ditto SDK's native binaries for other platforms
+  (roughly 270–300 MB, depending on the platform), keeping only the one for the
+  installing machine; the smoke test checks that exactly that one remains.
 - npm and Homebrew use the same tarball and SHA-256. Direct runtime dependencies
   are pinned to the versions in the build lockfile, including the native SDK.
 

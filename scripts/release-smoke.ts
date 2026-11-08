@@ -108,8 +108,14 @@ export async function smoke(mode: string, tag: string, native = true): Promise<v
             .stdout,
         );
         assert.match(info.channel, /^homebrew /);
+        // Only this platform's native SDK binary is kept.
+        const natives = fs
+          .readdirSync(path.join(prefix, "libexec"), { recursive: true, encoding: "utf8" })
+          .filter((f) => /ditto\.[^/\\]+\.node$/.test(f))
+          .map((f) => path.basename(f));
+        assert.deepEqual(natives, [`ditto.${process.platform}-${process.arch}.node`]);
         console.log(
-          `Homebrew install, offline DQL, and channel detection passed on ${process.platform}/${process.arch}`,
+          `Homebrew install, offline DQL, native binary pruning, and channel detection passed on ${process.platform}/${process.arch}`,
         );
       } finally {
         if (installed) await execa("brew", ["uninstall", "--formula", name], { env });

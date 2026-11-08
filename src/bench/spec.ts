@@ -49,7 +49,7 @@ export function cleanStatement(statement: string): string {
 
 function suggestKey(key: string): string | undefined {
   const flat = key.toLowerCase().replace(/[_-]/g, "");
-  return KNOWN_KEYS.find((k) => k.toLowerCase() === flat);
+  return KNOWN_KEYS.find((k) => k.toLowerCase() === flat || k.toLowerCase() === `${flat}queries`);
 }
 
 function statementList(value: unknown, where: string): string[] {

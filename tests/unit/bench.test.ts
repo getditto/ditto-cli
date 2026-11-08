@@ -104,6 +104,9 @@ describe("parseBenchFile", () => {
     expect(() => parseBenchFile(JSON.stringify({ query: "q", aftereachqueries: [] }), "f")).toThrow(
       /did you mean "afterEachQueries"/,
     );
+    expect(() => parseBenchFile(JSON.stringify({ query: "q", afterEach: [] }), "f")).toThrow(
+      /did you mean "afterEachQueries"/,
+    );
   });
 
   it.each([
@@ -241,6 +244,18 @@ describe("runBenchmark", () => {
     );
     expect(r.failure?.stage).toBe("query");
     expect(f.calls).toEqual(["INSERT x", "POST"]);
+  });
+
+  it("auto warmup counts reset and after-each time toward its budget", async () => {
+    // 50 ms per statement: one warmup iteration is 150 ms, so 2 fill 250 ms.
+    const f = fakeSession({ costMs: 50 });
+    const r = await runBenchmark(
+      f.session,
+      spec({ query: "INSERT x", resetQueries: ["RESET"], afterEachQueries: ["AFTER"] }),
+      { runs: 1, warmup: "auto", now: f.now },
+    );
+    expect(r.warmup).toBe(2);
+    expect(r.samples).toEqual([50]); // the timed sample is still the query alone
   });
 
   it("auto warmup sizes itself from a pilot run", async () => {
