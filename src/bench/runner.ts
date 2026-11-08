@@ -17,7 +17,7 @@ export interface BenchOptions {
   now?: () => number;
 }
 
-export type BenchStage = "pre" | "warmup" | "reset" | "query" | "post";
+export type BenchStage = "pre" | "warmup" | "reset" | "query" | "after-each" | "post";
 
 export interface BenchResult {
   name: string;
@@ -58,9 +58,11 @@ async function exec(session: QueryExecutor, stage: BenchStage, statement: string
 /**
  * Time one benchmark, following the dql-metrics-benchmark runner:
  *   preQueries once → warmup (untimed) → `runs` timed executions → postQueries.
- * resetQueries run untimed before every warmup and timed execution, so a
- * write measures a real mutation each time. postQueries always run, even
- * after a failure, so indexes and fixtures don't leak into the next run.
+ * Around every warmup and timed execution, resetQueries run before it and
+ * afterEachQueries after it (both untimed), so a write measures a real
+ * mutation each time. afterEachQueries run only after a successful execution.
+ * postQueries always run, even after a failure, so indexes and fixtures
+ * don't leak into the next run.
  */
 export async function runBenchmark(
   session: QueryExecutor,
@@ -85,10 +87,11 @@ export async function runBenchmark(
     classify(spec.query) === "mutation" &&
     firstKeyword(spec.query) !== "UPDATE" &&
     spec.resetQueries.length === 0 &&
+    spec.afterEachQueries.length === 0 &&
     executions > 1
   ) {
     opts.warn?.(
-      `${spec.name}: this write has no resetQueries, so runs after the first may change nothing (or fail). Put the data back before each run with resetQueries (--before-each on the command line).`,
+      `${spec.name}: this write has no resetQueries or afterEachQueries, so runs after the first may change nothing (or fail). Put the data back before each run with resetQueries (--before-each on the command line), or undo the write after each run with afterEachQueries (--after-each).`,
     );
   }
 
@@ -99,7 +102,9 @@ export async function runBenchmark(
     await reset();
     const started = now();
     const r = await exec(session, stage, spec.query);
-    return { ms: now() - started, rows: r.items.length };
+    const ms = now() - started;
+    for (const s of spec.afterEachQueries) await exec(session, "after-each", s);
+    return { ms, rows: r.items.length };
   };
 
   try {

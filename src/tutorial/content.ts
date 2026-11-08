@@ -451,18 +451,31 @@ dittosh dql bench "EVICT FROM movies WHERE _id = 'bench-doc'" --runs 10 \\
 `),
         text(`
 Each run inserts \`bench-doc\` (untimed) and then evicts it (timed), so every run
-measures a real eviction, and the store ends as it started. \`--pre\`,
-\`--before-each\` (also spelled \`--reset\`), and \`--post\` can each be repeated.
+measures a real eviction, and the store ends as it started.
+
+To time an insert instead, undo it after every run with \`--after-each\` (also
+untimed), so the next run can insert the same document again:
+`),
+        sh(`
+dittosh dql bench "INSERT INTO movies VALUES ({'_id': 'bench-doc', 'rated': 'TEST'})" --runs 10 \\
+  --after-each "EVICT FROM movies WHERE _id = 'bench-doc'"
+`),
+        text(`
+\`--pre\`, \`--before-each\` (also spelled \`--reset\`), \`--after-each\`, and
+\`--post\` can each be repeated, and \`--before-each\` and \`--after-each\` can be
+used together.
 
 **Keep benchmarks in a file.** A benchmark file is JSON: an object whose keys name
 the benchmarks. Each benchmark has a \`query\` (the statement that is timed) and,
-optionally, \`preQueries\`, \`resetQueries\`, and \`postQueries\` (lists of statements,
-the file versions of \`--pre\`, \`--before-each\`, and \`--post\`) and a \`description\`.
+optionally, \`preQueries\`, \`resetQueries\`, \`afterEachQueries\`, and \`postQueries\`
+(lists of statements, the file versions of \`--pre\`, \`--before-each\`,
+\`--after-each\`, and \`--post\`) and a \`description\`.
 They run in this order:
 
 1. \`preQueries\` once
-2. warmup runs, each preceded by \`resetQueries\`
-3. the timed runs, each preceded by \`resetQueries\` (untimed)
+2. warmup runs, each preceded by \`resetQueries\` and followed by \`afterEachQueries\`
+3. the timed runs, each preceded by \`resetQueries\` and followed by
+   \`afterEachQueries\` (both untimed)
 4. \`postQueries\` once, even after a failure
 
 The fastest way to start is a sample file built from a sample dataset. It includes

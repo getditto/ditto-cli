@@ -12,6 +12,8 @@ export interface BenchSpec {
   preQueries: string[];
   /** Run before every warmup and timed run, untimed (restores state for writes). */
   resetQueries: string[];
+  /** Run after every warmup and timed run that succeeds, untimed (undoes what a write did). */
+  afterEachQueries: string[];
   /** Run once at the end, even after a failure (e.g. DROP INDEX, EVICT fixtures). */
   postQueries: string[];
   description?: string;
@@ -25,7 +27,7 @@ export class BenchSpecError extends Error {
   }
 }
 
-const STATEMENT_LISTS = ["preQueries", "resetQueries", "postQueries"] as const;
+const STATEMENT_LISTS = ["preQueries", "resetQueries", "afterEachQueries", "postQueries"] as const;
 
 /** Keys the benchmark repo uses for its own tooling (oracles, labels); accepted and ignored. */
 const IGNORED_KEYS = new Set([
@@ -95,6 +97,7 @@ function parseEntry(raw: unknown, name: string, where: string, allowName: boolea
     query: cleanStatement(entry.query),
     preQueries: statementList(entry.preQueries, `${where}.preQueries`),
     resetQueries: statementList(entry.resetQueries, `${where}.resetQueries`),
+    afterEachQueries: statementList(entry.afterEachQueries, `${where}.afterEachQueries`),
     postQueries: statementList(entry.postQueries, `${where}.postQueries`),
     description: entry.description as string | undefined,
   };

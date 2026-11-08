@@ -120,6 +120,29 @@ describe("dittosh dql bench", () => {
     expect(stderr()).not.toContain("no resetQueries");
   });
 
+  it("--after-each runs after every run, in the order given", async () => {
+    await run(
+      "bench",
+      "INSERT INTO t VALUES ({'_id': 'x'})",
+      "--runs",
+      "2",
+      "--after-each",
+      "EVICT A",
+      "--after-each",
+      "EVICT B",
+      "--post",
+      "POST",
+      "-d",
+      dir,
+      "--format",
+      "json",
+    );
+    expect(process.exitCode).toBeUndefined();
+    const run1 = ["INSERT INTO t VALUES ({'_id': 'x'})", "EVICT A", "EVICT B"];
+    expect(h.calls).toEqual([...run1, ...run1, "POST"]);
+    expect(stderr()).not.toContain("no resetQueries");
+  });
+
   it("defaults to 50 runs and no warmup; long statements get a short name", async () => {
     const long = `SELECT * FROM t WHERE ${"a = 1 AND ".repeat(10)}b = 2`;
     await run("bench", long, "-d", dir, "--format", "json");
@@ -172,6 +195,18 @@ describe("dittosh dql bench", () => {
     expect(h.calls.slice(0, 2)).toEqual(["PRE", "PRE_A"]);
     expect(h.calls.slice(4, 6)).toEqual(["POST_A", "POST"]);
     expect(h.calls).not.toContain("SELECT b FROM t");
+  });
+
+  it("CLI --after-each runs after a file benchmark's own afterEachQueries", async () => {
+    const file = path.join(dir, "after.json");
+    fs.writeFileSync(
+      file,
+      JSON.stringify({ w: { query: "INSERT W", afterEachQueries: ["AFTER_W"] } }),
+    );
+    await run("bench", "-f", file, "--runs", "2", "--after-each", "AFTER", "-d", dir);
+    expect(process.exitCode).toBeUndefined();
+    const run1 = ["INSERT W", "AFTER_W", "AFTER"];
+    expect(h.calls).toEqual([...run1, ...run1]);
   });
 
   it("writes results to a file with -o", async () => {
@@ -232,6 +267,7 @@ describe("dittosh dql bench", () => {
     [["bench", "-f", "/no/such/file.json"], "Cannot read /no/such/file.json"],
     [["bench", "--example", "nope"], "Unknown dataset: nope"],
     [["bench", "--example", "pos", "SELECT 1"], "--example only writes a sample file"],
+    [["bench", "--example", "pos", "--after-each", "X"], "--example only writes a sample file"],
     [["bench", "--example", "pos", "-o", "/no/such/dir/x.json"], "no such directory"],
   ])("usage error: %j", async (args, message) => {
     await run(...args, "-d", dir);

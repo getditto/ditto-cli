@@ -142,6 +142,7 @@ interface BenchCliOptions {
   warmup?: string | boolean;
   pre?: string[];
   reset?: string[];
+  afterEach?: string[];
   post?: string[];
   example?: string;
   dataDir?: string;
@@ -193,6 +194,11 @@ export function registerBenchCommand(dql: ReturnType<Command["command"]>, deps: 
       "run untimed before every run, e.g. re-insert what a write removes (repeatable)",
     )
     .option("--reset <statement>", "same as --before-each (resetQueries in a file)", collect)
+    .option(
+      "--after-each <statement>",
+      "run untimed after every successful run, e.g. remove what a write added (repeatable)",
+      collect,
+    )
     .option("--post <statement>", "run once at the end, even after a failure (repeatable)", collect)
     .option(
       "--example <dataset>",
@@ -211,6 +217,8 @@ Examples:
     --post "DROP INDEX IF EXISTS movies_rated ON movies"
   dittosh dql bench "EVICT FROM movies WHERE _id = 'bench-doc'" \\
     --before-each "INSERT INTO movies VALUES ({'_id': 'bench-doc'})"
+  dittosh dql bench "INSERT INTO movies VALUES ({'_id': 'bench-doc'})" \\
+    --after-each "EVICT FROM movies WHERE _id = 'bench-doc'"
   dittosh dql bench --example retail -o retail-bench.json
   dittosh dql bench -f retail-bench.json --runs 50 --warmup`,
     )
@@ -219,9 +227,9 @@ Examples:
     })
     .action(async (statement: string | undefined, opts: BenchCliOptions) => {
       if (opts.example !== undefined) {
-        if (statement || opts.file || opts.pre || opts.reset || opts.post) {
+        if (statement || opts.file || opts.pre || opts.reset || opts.afterEach || opts.post) {
           usage(
-            "--example only writes a sample file; leave out the statement, -f, and --pre/--before-each/--post.",
+            "--example only writes a sample file; leave out the statement, -f, and --pre/--before-each/--after-each/--post.",
           );
           return;
         }
@@ -265,6 +273,7 @@ Examples:
         format = resolveBenchOutput({ format: opts.format?.replace(/^=/, ""), out });
         const pre = (opts.pre ?? []).map(cleanStatement).filter(Boolean);
         const reset = (opts.reset ?? []).map(cleanStatement).filter(Boolean);
+        const afterEach = (opts.afterEach ?? []).map(cleanStatement).filter(Boolean);
         const post = (opts.post ?? []).map(cleanStatement).filter(Boolean);
         if (file) {
           let text: string;
@@ -283,13 +292,23 @@ Examples:
             ...s,
             preQueries: [...pre, ...s.preQueries],
             resetQueries: [...reset, ...s.resetQueries],
+            afterEachQueries: [...s.afterEachQueries, ...afterEach],
             postQueries: [...s.postQueries, ...post],
           }));
         } else {
           const query = cleanStatement(statement!);
           if (!query) throw new BenchSpecError("The statement is empty.");
           const name = query.length > 60 ? `${query.slice(0, 59)}…` : query;
-          specs = [{ name, query, preQueries: pre, resetQueries: reset, postQueries: post }];
+          specs = [
+            {
+              name,
+              query,
+              preQueries: pre,
+              resetQueries: reset,
+              afterEachQueries: afterEach,
+              postQueries: post,
+            },
+          ];
         }
       } catch (err) {
         if (

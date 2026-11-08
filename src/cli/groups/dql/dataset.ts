@@ -102,6 +102,7 @@ async function benchCatalogQuery(
           query: entry.query,
           preQueries: isWrite || opts.setup ? (entry.preQueries ?? []) : [],
           resetQueries: entry.resetQueries ?? [],
+          afterEachQueries: [],
           postQueries: isWrite ? (entry.postQueries ?? []) : [],
         },
       ],

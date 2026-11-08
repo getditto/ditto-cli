@@ -73,6 +73,7 @@ describe("parseBenchFile", () => {
         query: "SELECT * FROM movies WHERE rated = 'PG'",
         preQueries: ["CREATE INDEX r ON movies (rated)"],
         resetQueries: [],
+        afterEachQueries: [],
         postQueries: ["DROP INDEX r ON movies"],
         description: undefined,
       },
@@ -95,6 +96,14 @@ describe("parseBenchFile", () => {
     );
     expect(one[0]).toMatchObject({ name: "benchmark", description: "x" });
     expect(one[0]!.resetQueries).toEqual(["EVICT FROM t WHERE true"]);
+    const after = parseBenchFile(
+      JSON.stringify({ query: "INSERT x", afterEachQueries: "EVICT FROM t WHERE _id = 'x';" }),
+      "f",
+    );
+    expect(after[0]!.afterEachQueries).toEqual(["EVICT FROM t WHERE _id = 'x'"]);
+    expect(() => parseBenchFile(JSON.stringify({ query: "q", aftereachqueries: [] }), "f")).toThrow(
+      /did you mean "afterEachQueries"/,
+    );
   });
 
   it.each([
@@ -177,6 +186,7 @@ const spec = (over: Partial<BenchSpec> = {}): BenchSpec => ({
   query: "SELECT * FROM t",
   preQueries: [],
   resetQueries: [],
+  afterEachQueries: [],
   postQueries: [],
   ...over,
 });
@@ -205,6 +215,34 @@ describe("runBenchmark", () => {
     expect(notes).toEqual(["  b: 1 warmup runs"]);
   });
 
+  it("runs afterEachQueries untimed after every warmup and timed run", async () => {
+    const f = fakeSession({ costMs: 2 });
+    const r = await runBenchmark(
+      f.session,
+      spec({
+        query: "INSERT x",
+        resetQueries: ["RESET"],
+        afterEachQueries: ["AFTER 1", "AFTER 2"],
+        postQueries: ["POST"],
+      }),
+      { runs: 2, warmup: 1, now: f.now },
+    );
+    const run = ["RESET", "INSERT x", "AFTER 1", "AFTER 2"];
+    expect(f.calls).toEqual([...run, ...run, ...run, "POST"]);
+    expect(r).toMatchObject({ ok: true, runs: 2, warmup: 1, samples: [2, 2] });
+  });
+
+  it("skips afterEachQueries when the query fails, then runs postQueries", async () => {
+    const f = fakeSession({ fail: /INSERT/ });
+    const r = await runBenchmark(
+      f.session,
+      spec({ query: "INSERT x", afterEachQueries: ["AFTER"], postQueries: ["POST"] }),
+      { runs: 2, warmup: 0 },
+    );
+    expect(r.failure?.stage).toBe("query");
+    expect(f.calls).toEqual(["INSERT x", "POST"]);
+  });
+
   it("auto warmup sizes itself from a pilot run", async () => {
     const f = fakeSession({ costMs: 50 });
     const r = await runBenchmark(f.session, spec(), { runs: 1, warmup: "auto", now: f.now });
@@ -228,6 +266,7 @@ describe("runBenchmark", () => {
     ["pre", { preQueries: ["CREATE INDEX x"] }, /CREATE/],
     ["reset", { resetQueries: ["EVICT x"] }, /EVICT/],
     ["query", {}, /SELECT/],
+    ["after-each", { afterEachQueries: ["EVICT x"] }, /EVICT/],
   ] as [BenchStage, Partial<BenchSpec>, RegExp][])(
     "a failure in %s stops timing but still runs postQueries",
     async (stage, over, fail) => {
@@ -270,7 +309,7 @@ describe("runBenchmark", () => {
       warmup: 0,
       warn: (m) => warns.push(m),
     });
-    expect(warns[0]).toContain("no resetQueries");
+    expect(warns[0]).toContain("no resetQueries or afterEachQueries");
     warns.length = 0;
     await runBenchmark(fakeSession().session, write, {
       runs: 1,
@@ -285,6 +324,11 @@ describe("runBenchmark", () => {
         warmup: "auto",
         warn: (m) => warns.push(m),
       },
+    );
+    await runBenchmark(
+      fakeSession().session,
+      spec({ query: "INSERT INTO t VALUES ({'_id': 'x'})", afterEachQueries: ["EVICT …"] }),
+      { runs: 5, warmup: 0, warn: (m) => warns.push(m) },
     );
     await runBenchmark(fakeSession().session, spec(), {
       runs: 5,

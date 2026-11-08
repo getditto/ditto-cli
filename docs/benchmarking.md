@@ -32,6 +32,7 @@ dittosh dql bench -f movies-bench.json --runs 50 --warmup
 | `--pre <stmt>` | Run once before warmup and timing. Repeatable. |
 | `--before-each <stmt>` | Run before every warmup and timed run, untimed. Repeatable. The file version is `resetQueries`. |
 | `--reset <stmt>` | Same as `--before-each`. |
+| `--after-each <stmt>` | Run after every warmup and timed run that succeeds, untimed. Repeatable. The file version is `afterEachQueries`. |
 | `--post <stmt>` | Run once at the end, even after a failure. Repeatable. |
 | `--example <dataset>` | Write a sample benchmark file for `movies`, `retail`, `retail-joins`, or `pos`: to stdout, or to the `-o` path. |
 | `-o, --out <path>` | Write the results to a file; the extension picks the format (`.json`, `.csv`, `.md`, `.html`). |
@@ -39,7 +40,7 @@ dittosh dql bench -f movies-bench.json --runs 50 --warmup
 | `-d, --data-dir <path>` | The store to use. |
 
 With `-f`, `--pre` and `--before-each` statements run before each benchmark's own, and
-`--post` statements run after its own.
+`--after-each` and `--post` statements run after its own.
 
 `dittosh dql dataset run <query> --runs <n> [--warmup [n]]` benchmarks one query from
 a sample dataset's catalog with the same runner. It keeps `dataset run`'s setup rules:
@@ -57,17 +58,31 @@ dittosh dql bench "EVICT FROM movies WHERE _id = 'bench-doc'" --runs 50 \
 
 With the insert in `--pre` instead, only the first run would evict anything.
 
+To time an insert, undo it after each run with `--after-each`, so the next run
+inserts the same document again:
+
+```bash
+dittosh dql bench "INSERT INTO movies VALUES ({'_id': 'bench-doc', 'rated': 'TEST'})" --runs 50 \
+  --after-each "EVICT FROM movies WHERE _id = 'bench-doc'"
+```
+
+`--before-each` and `--after-each` can be used together; neither is included in
+the timings.
+
 ## What happens, in order
 
 For each benchmark:
 
 1. **`preQueries`** run once. Typical use: `CREATE INDEX`, or inserting a test document.
-2. **Warmup** (if asked for): the query runs untimed, `resetQueries` before each run.
+2. **Warmup** (if asked for): the query runs untimed, with `resetQueries` before and
+   `afterEachQueries` after each run.
    The first run of a query pays for cold caches and query planning; warmup keeps
    that out of the numbers. With auto warmup, the first warmup run is timed to decide
    how many more fit in 250 ms.
 3. **Timed runs**: `resetQueries` run (untimed), then the query runs and its time is
-   recorded. This repeats `--runs` times.
+   recorded, then `afterEachQueries` run (untimed). This repeats `--runs` times.
+   `afterEachQueries` run only after the query succeeds; if it fails, the
+   benchmark stops and `postQueries` clean up.
 4. **`postQueries`** run once, **even if an earlier step failed**. Typical use:
    `DROP INDEX`, removing test documents.
 
@@ -77,7 +92,7 @@ benchmarks in the file still run. The command exits 1 if any benchmark (or any
 post statement) failed, and 2 for usage errors such as a bad file.
 
 An `INSERT`, `EVICT`, or `DELETE` benchmark that runs more than once with no
-`resetQueries` gets a warning: after the first run, an `EVICT` or `DELETE` usually
+`resetQueries` or `afterEachQueries` gets a warning: after the first run, an `EVICT` or `DELETE` usually
 finds nothing to remove, and an `INSERT` of a fixed `_id` fails or does nothing.
 An `UPDATE` does the same work on every run, so it needs no reset.
 
@@ -109,6 +124,7 @@ describes it:
 | `query` | yes | The statement that is timed. |
 | `preQueries` | no | Statements run once, before warmup and timing. |
 | `resetQueries` | no | Statements run before every warmup and timed run, untimed (`--before-each` on the command line). |
+| `afterEachQueries` | no | Statements run after every warmup and timed run that succeeds, untimed (`--after-each` on the command line). A dittosh addition; the DQL benchmark suites don't use it. |
 | `postQueries` | no | Statements run once at the end, even after a failure. |
 | `description` | no | Free text; not used by the runner. |
 

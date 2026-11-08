@@ -57,6 +57,25 @@ describe.skipIf(!hasDevCredentials)(`integration: bench (${NO_CREDENTIALS})`, ()
     60_000,
   );
 
+  it("afterEachQueries undo an INSERT so every run inserts again", async () => {
+    const r = await runBenchmark(
+      session,
+      {
+        name: "insert",
+        query: "INSERT INTO bench_after VALUES ({'_id': 'doc', 'n': 1})",
+        preQueries: [],
+        resetQueries: [],
+        afterEachQueries: ["EVICT FROM bench_after WHERE _id = 'doc'"],
+        postQueries: [],
+      },
+      { runs: 3, warmup: 2 },
+    );
+    expect(r.failure, r.failure?.error).toBeUndefined();
+    expect(r.runs).toBe(3);
+    const left = extractRows(await session.execute("SELECT count(*) AS n FROM bench_after"));
+    expect(left[0]!.n).toBe(0);
+  });
+
   it("auto warmup runs at least once against a real store", async () => {
     const r = await runBenchmark(
       session,
@@ -65,6 +84,7 @@ describe.skipIf(!hasDevCredentials)(`integration: bench (${NO_CREDENTIALS})`, ()
         query: "SELECT count(*) FROM movies",
         preQueries: [],
         resetQueries: [],
+        afterEachQueries: [],
         postQueries: [],
       },
       { runs: 2, warmup: "auto" },

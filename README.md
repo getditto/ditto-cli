@@ -168,8 +168,8 @@ dittosh dql dataset run filtered_query_with_index --runs 50 --warmup   # a catal
 ```
 
 - `--runs <n>`: timed runs (default 50). `--warmup`: untimed runs first, enough to fill about 250 ms; `--warmup <n>` for an exact count.
-- `--pre` runs once before timing, `--before-each` (or `--reset`) before every run (untimed, e.g. re-insert the document an `EVICT` removes), and `--post` once at the end, even after a failure. Each is repeatable.
-- `-f <file>`: benchmarks from a JSON file, in the same format as Ditto's DQL benchmark suites: `{"name": {"query": "…", "preQueries": […], "resetQueries": […], "postQueries": […]}}`. `--only a,b` picks entries. `--example <dataset>` writes a sample file for `movies`, `retail`, `retail-joins`, or `pos`.
+- `--pre` runs once before timing, `--before-each` (or `--reset`) before every run (untimed, e.g. re-insert the document an `EVICT` removes), `--after-each` after every run (untimed, e.g. evict the document an `INSERT` added), and `--post` once at the end, even after a failure. Each is repeatable.
+- `-f <file>`: benchmarks from a JSON file, in the same format as Ditto's DQL benchmark suites: `{"name": {"query": "…", "preQueries": […], "resetQueries": […], "afterEachQueries": […], "postQueries": […]}}`. `--only a,b` picks entries. `--example <dataset>` writes a sample file for `movies`, `retail`, `retail-joins`, or `pos`.
 - Results go to stdout (a table in a terminal, JSON when piped, or `-o`/`--format`); progress goes to stderr. Exit code 1 if any benchmark fails.
 
 The full file format, the order of steps, and how to build a benchmark file are in [docs/benchmarking.md](docs/benchmarking.md).
