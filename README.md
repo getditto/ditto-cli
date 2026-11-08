@@ -146,6 +146,27 @@ dittosh dql dataset reset retail --yes            # evict the dataset's collecti
 
 `dataset run` prints the resolved statement (on stderr, so stdout stays clean), then executes it. Query names resolve across datasets; ambiguous names list the matches. `--setup` applies the entry's index DDL first; write-category catalog queries require `--yes` and clean up after themselves. `--seed <n>` reproduces a dataset exactly; changing seeds adds new documents (reset first for a clean slate).
 
+### `dittosh dql bench` — benchmark statements
+
+Time a statement over many runs and get mean, p50, p95, p99, min, max, and standard deviation:
+
+```bash
+dittosh dql bench "SELECT * FROM movies WHERE rated = 'PG'" --runs 100 --warmup
+dittosh dql bench "SELECT * FROM movies WHERE rated = 'PG'" \
+  --pre "CREATE INDEX IF NOT EXISTS movies_rated ON movies (rated)" \
+  --post "DROP INDEX IF EXISTS movies_rated ON movies"
+dittosh dql bench --example movies -o movies-bench.json   # sample benchmark file
+dittosh dql bench -f movies-bench.json --runs 50 --warmup
+dittosh dql dataset run filtered_query_with_index --runs 50 --warmup   # a catalog query
+```
+
+- `--runs <n>`: timed runs (default 50). `--warmup`: untimed runs first, enough to fill about 250 ms; `--warmup <n>` for an exact count.
+- `--pre` runs once before timing, `--before-each` (or `--reset`) before every run (untimed, e.g. re-insert the document an `EVICT` removes), and `--post` once at the end, even after a failure. Each is repeatable.
+- `-f <file>`: benchmarks from a JSON file, in the same format as Ditto's DQL benchmark suites: `{"name": {"query": "…", "preQueries": […], "resetQueries": […], "postQueries": […]}}`. `--only a,b` picks entries. `--example <dataset>` writes a sample file for `movies`, `retail`, `retail-joins`, or `pos`.
+- Results go to stdout (a table in a terminal, JSON when piped, or `-o`/`--format`); progress goes to stderr. Exit code 1 if any benchmark fails.
+
+The full file format, the order of steps, and how to build a benchmark file are in [docs/benchmarking.md](docs/benchmarking.md).
+
 ### Global flags
 
 `--no-color`, `--quiet` (suppress informational notes), `--no-update-check` (planned; update flow lands in a later milestone).
@@ -182,7 +203,7 @@ dittosh tutorial --interactive --plain # the same lessons in a line-by-line shel
 dittosh tutorial --interactive --level advanced   # start at beginner | intermediate | advanced
 ```
 
-The Markdown tutorial is tailored to this install (CLI and SDK version, Homebrew or npm upgrade commands, platform) and covers importing, querying, exporting, the interactive shell and `.metrics`, sample datasets, `--explain`/`--profile`/`--advise`, joins, diagnostics with system collections and more advanced DQL, and agent skills. Every runnable command in it is exercised by the e2e suite.
+The Markdown tutorial is tailored to this install (CLI and SDK version, Homebrew or npm upgrade commands, platform) and covers importing, querying, exporting, the interactive shell and `.metrics`, sample datasets, `--explain`/`--profile`/`--advise`, benchmarking with `dql bench` (including benchmark files), joins, diagnostics with system collections and more advanced DQL, and agent skills. Every runnable command in it is exercised by the e2e suite.
 
 The interactive lessons teach DQL concepts — documents and collections, projection, predicates, boolean logic, sorting, writes, expressions and functions, `CASE`, MISSING vs NULL, aggregation and grouping, joins, `ANY … SATISFIES`, indexes, `EXPLAIN`, `PROFILE`, and system collections — in 27 lessons across beginner, intermediate, and advanced levels. Each lesson explains the idea (with an "if you know SQL" note), shows the syntax, sets a task, and checks your answer. They run in a separate practice store (`<config dir>/tutorial-store`) and save your progress. The lessons open full screen: the lesson stays in a panel at the top, results scroll below it, the latest ✓/✗ verdict sits above the prompt, a sidebar on the left outlines the lessons and your progress (Ctrl+B toggles it), Ctrl+T (or `.schema`) shows the fields of the collections each lesson uses, and `?` slides a help panel in from the right. Press Enter to run a statement (`;` is optional); Tab hints, Ctrl+N/Ctrl+P move between lessons, Ctrl+L picks a lesson from a list, PgUp/PgDn scroll, and Ctrl+D quits. The dot-commands (`.hint`, `.answer`, `.next`/`.back`, `.lessons`, `.level <name>`, `.goto <n>`, `.reset`, `.exit`) work too. `--plain`, or a window smaller than 60×20, uses a simple line-by-line shell instead.
 

@@ -31,6 +31,7 @@ describe("rewriteDefaultSubcommand", () => {
       "collections",
       "indexes",
       "dataset",
+      "bench",
       "delete-store",
       "import",
     ]) {
@@ -82,6 +83,16 @@ describe("rewriteDefaultSubcommand", () => {
       "reset",
       "--yes",
       "movies",
+    ]);
+  });
+
+  it("relocates flags before bench past it (dql -d X bench <stmt>)", () => {
+    expect(rewriteDefaultSubcommand(["dql", "-d", "/tmp/x", "bench", "SELECT 1"])).toEqual([
+      "dql",
+      "bench",
+      "-d",
+      "/tmp/x",
+      "SELECT 1",
     ]);
   });
 

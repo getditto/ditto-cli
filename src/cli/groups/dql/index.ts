@@ -20,6 +20,7 @@ import {
 import { isBlankOrComments, splitComplete, splitStatements } from "../../../query/split.js";
 import { FormatError, resolveFormat } from "../../../render/output.js";
 import { runBatch, stripDotCommandLines } from "./batch.js";
+import { registerBenchCommand } from "./bench.js";
 import { registerDatasetCommands } from "./dataset.js";
 import { deleteStore } from "./delete-store.js";
 import { collectDoctorChecks } from "./doctor.js";
@@ -149,6 +150,7 @@ export function registerDqlGroup(dql: ReturnType<Command["command"]>): void {
   dql.description("Run DQL statements against a local Ditto store");
 
   registerDatasetCommands(dql, { openSession });
+  registerBenchCommand(dql, { openSession });
 
   dql
     .command("doctor")

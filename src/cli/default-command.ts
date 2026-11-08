@@ -33,6 +33,7 @@ const DEFAULT_SUBCOMMANDS: Record<string, { exec: string; known: Set<string> }> 
       "collections",
       "indexes",
       "dataset",
+      "bench",
       "delete-store",
       "import",
       "help",

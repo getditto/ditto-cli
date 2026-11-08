@@ -408,6 +408,85 @@ plan with the earlier one. \`--yes\` confirms the schema change without promptin
       ],
     },
     {
+      title: "Benchmark a query",
+      blocks: [
+        text(`
+One timing can mislead: the first run of a query pays for cold caches and query
+planning. \`dql bench\` runs a statement many times and reports the spread.
+`),
+        sh(
+          `dittosh dql bench "SELECT _id.title FROM movies WHERE rated = 'PG'" --runs 20 --warmup --format json`,
+          ['"p95_ms"'],
+        ),
+        text(`
+- \`--runs <n>\` sets how many timed runs to make (default 50).
+- \`--warmup\` runs the statement untimed first, enough times to fill about 250 ms.
+  \`--warmup 5\` runs exactly 5 warmup runs. Leave it out for no warmup.
+- With more than one run you get the mean, **p50** (the median), **p95**, **p99**,
+  min, max, and standard deviation, in milliseconds. p95 means 95% of runs were at
+  least this fast.
+
+Progress goes to stderr and the results to stdout, so \`--format json\`, \`-o\`, and
+pipes work as they do for queries.
+
+**Set up and clean up around the timing.** \`--pre\` runs a statement once before
+timing and \`--post\` runs one once afterwards, even if something failed. Use them to
+measure a query with an index, then remove it so the store is back where it started:
+`),
+        sh(`
+dittosh dql bench "SELECT * FROM movies WHERE _id.year = '1999'" --runs 20 \\
+  --pre "CREATE INDEX IF NOT EXISTS movies_year ON movies (_id.year)" \\
+  --post "DROP INDEX IF EXISTS movies_year ON movies"
+`),
+        text(`
+Run it again without \`--pre\` and \`--post\` to compare against a full scan.
+
+**Restore state between runs.** A write changes the data, so the second run of the
+same \`EVICT\` would find nothing to remove. \`--pre\` runs only once, so it can't help
+here: \`--before-each\` runs a statement before every run, untimed, to put the data back:
+`),
+        sh(`
+dittosh dql bench "EVICT FROM movies WHERE _id = 'bench-doc'" --runs 10 \\
+  --before-each "INSERT INTO movies VALUES ({'_id': 'bench-doc', 'rated': 'TEST'})"
+`),
+        text(`
+Each run inserts \`bench-doc\` (untimed) and then evicts it (timed), so every run
+measures a real eviction, and the store ends as it started. \`--pre\`,
+\`--before-each\` (also spelled \`--reset\`), and \`--post\` can each be repeated.
+
+**Keep benchmarks in a file.** A benchmark file is JSON: an object whose keys name
+the benchmarks. Each benchmark has a \`query\` (the statement that is timed) and,
+optionally, \`preQueries\`, \`resetQueries\`, and \`postQueries\` (lists of statements,
+the file versions of \`--pre\`, \`--before-each\`, and \`--post\`) and a \`description\`.
+They run in this order:
+
+1. \`preQueries\` once
+2. warmup runs, each preceded by \`resetQueries\`
+3. the timed runs, each preceded by \`resetQueries\` (untimed)
+4. \`postQueries\` once, even after a failure
+
+The fastest way to start is a sample file built from a sample dataset. It includes
+a plain read, an indexed read, and a write that restores its own data, each with a
+description of what its parts do:
+`),
+        sh(
+          `
+dittosh dql bench --example movies -o movies-bench.json
+dittosh dql bench -f movies-bench.json --runs 10 --warmup 2
+`,
+          ["filtered_query_with_index"],
+        ),
+        text(`
+Open \`movies-bench.json\` to see the format, then copy an entry and change it to
+time your own statements. \`--only <name>,<name>\` runs some of a file's benchmarks,
+and \`dataset run <query> --runs <n> --warmup\` benchmarks a single catalog query.
+The other samples are \`--example retail\`, \`retail-joins\`, and \`pos\`; load that
+dataset first. Timings depend on your hardware and data size, so compare runs made
+on the same machine with the same data.
+`),
+      ],
+    },
+    {
       title: "Try a JOIN in a separate store",
       blocks: [
         text(
