@@ -679,3 +679,61 @@ describe("tutorial command wiring", () => {
     }
   });
 });
+
+describe("LessonRunner runs one action at a time", () => {
+  it("a jump waits for the answer being checked, so the data reset can't empty the store under it", async () => {
+    const log: string[] = [];
+    let releaseCheck: () => void = () => {};
+    let checking = false;
+    const session: QueryExecutor = {
+      execute: async (s: string) => {
+        if (s === LESSONS[0]!.answer && !checking) {
+          checking = true;
+          log.push("answer:start");
+          await new Promise<void>((resolve) => {
+            releaseCheck = resolve;
+          });
+          log.push("answer:end");
+        } else if (RESET_STATEMENTS.includes(s)) {
+          log.push("reset");
+        }
+        return { items: SEED_PRODUCTS.map((value) => ({ value })) } as never;
+      },
+    };
+    const runner = new LessonRunner(session, {
+      io: { print: () => {}, width: () => 80 },
+      progress: { lesson: 0, completed: [] },
+      saveProgress: () => {},
+    });
+    const submitted = runner.submit(LESSONS[0]!.answer);
+    const moved = runner.goto("5");
+    await new Promise((r) => setTimeout(r, 10));
+    expect(log).toEqual(["answer:start"]); // the jump hasn't reset anything yet
+    releaseCheck();
+    await Promise.all([submitted, moved]);
+    expect(log.indexOf("answer:end")).toBeLessThan(log.lastIndexOf("reset"));
+    expect(runner.isCompleted(0)).toBe(true);
+    expect(runner.current).toBe(4);
+  });
+
+  it("a failed action doesn't block the next one", async () => {
+    let fail = true;
+    const session: QueryExecutor = {
+      execute: async () => {
+        if (fail) {
+          fail = false;
+          throw new Error("store went away");
+        }
+        return { items: [] } as never;
+      },
+    };
+    const runner = new LessonRunner(session, {
+      io: { print: () => {}, width: () => 80 },
+      progress: { lesson: 0, completed: [] },
+      saveProgress: () => {},
+    });
+    await expect(runner.next()).rejects.toThrow("store went away");
+    await runner.goto("3");
+    expect(runner.current).toBe(2);
+  });
+});

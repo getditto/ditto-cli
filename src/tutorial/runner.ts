@@ -126,12 +126,56 @@ export class LessonRunner {
   }
 
   /** Restore the practice data. */
+  /** The action in progress; the next one waits for it (see exclusive). */
+  private queue: Promise<unknown> = Promise.resolve();
+
+  /**
+   * Run lesson actions one at a time. Moving to a lesson resets the practice
+   * data, so a jump that started while an answer was still being checked
+   * could empty the store under the check.
+   */
+  private exclusive<T>(action: () => Promise<T>): Promise<T> {
+    const run = this.queue.then(action, action);
+    this.queue = run.catch(() => {});
+    return run;
+  }
+
+  start(opts: { level?: Level } = {}): Promise<void> {
+    return this.exclusive(() => this.startNow(opts));
+  }
+
+  /** Run a statement and check it against the current lesson. */
+  submit(statement: string): Promise<boolean> {
+    return this.exclusive(() => this.submitNow(statement));
+  }
+
+  next(): Promise<void> {
+    return this.exclusive(() => this.nextNow());
+  }
+
+  back(): Promise<void> {
+    return this.exclusive(() => this.backNow());
+  }
+
+  /** Jump to a 1-based lesson number. */
+  goto(arg: string | undefined): Promise<void> {
+    return this.exclusive(() => this.gotoNow(arg));
+  }
+
+  level(arg: string | undefined): Promise<void> {
+    return this.exclusive(() => this.levelNow(arg));
+  }
+
+  reset(): Promise<void> {
+    return this.exclusive(() => this.resetNow());
+  }
+
   async resetData(): Promise<void> {
     for (const s of RESET_STATEMENTS) await this.session.execute(s);
   }
 
   /** Welcome banner + the current lesson (show() restores the practice data). */
-  async start(opts: { level?: Level } = {}): Promise<void> {
+  private async startNow(opts: { level?: Level } = {}): Promise<void> {
     if (opts.level) this.index = firstLessonOf(opts.level, this.lessons);
     if (this.io.onLesson) {
       await this.show();
@@ -261,7 +305,7 @@ export class LessonRunner {
   }
 
   /** Run a submitted statement, show its result, and check it against the lesson. */
-  async submit(statement: string): Promise<boolean> {
+  private async submitNow(statement: string): Promise<boolean> {
     // Captured up front: a command run while this is awaiting (.next, .goto)
     // must not change which lesson gets marked complete.
     const index = this.index;
@@ -364,7 +408,7 @@ export class LessonRunner {
     );
   }
 
-  async next(): Promise<void> {
+  private async nextNow(): Promise<void> {
     if (this.index + 1 >= this.lessons.length) {
       this.io.print(chalk.dim("This is the last lesson."));
       return;
@@ -374,7 +418,7 @@ export class LessonRunner {
     await this.show();
   }
 
-  async back(): Promise<void> {
+  private async backNow(): Promise<void> {
     if (this.index === 0) {
       this.io.print(chalk.dim("This is the first lesson."));
       return;
@@ -384,8 +428,7 @@ export class LessonRunner {
     await this.show();
   }
 
-  /** Jump to a 1-based lesson number. */
-  async goto(arg: string | undefined): Promise<void> {
+  private async gotoNow(arg: string | undefined): Promise<void> {
     const n = Number(arg?.trim());
     if (!Number.isInteger(n) || n < 1 || n > this.lessons.length) {
       this.io.print(chalk.red(`usage: .goto <1-${this.lessons.length}>`));
@@ -396,7 +439,7 @@ export class LessonRunner {
     await this.show();
   }
 
-  async level(arg: string | undefined): Promise<void> {
+  private async levelNow(arg: string | undefined): Promise<void> {
     const name = arg?.trim().toLowerCase() as Level;
     if (!LEVELS.includes(name)) {
       this.io.print(chalk.red(`usage: .level ${LEVELS.join("|")}`));
@@ -424,7 +467,7 @@ export class LessonRunner {
     this.io.print(out.join("\n"));
   }
 
-  async reset(): Promise<void> {
+  private async resetNow(): Promise<void> {
     this.io.print(chalk.dim("Practice data restored."));
     await this.show();
   }
