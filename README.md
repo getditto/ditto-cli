@@ -34,6 +34,8 @@ npm install -g @dittolive/cli@latest
 brew update && brew upgrade dittosh
 ```
 
+If `brew upgrade` says the tap is untrusted, run `brew trust getditto/tap` once and upgrade again.
+
 `dittosh update` detects npm or Homebrew and runs the matching update command.
 Maintainers: see [Publishing releases](docs/publishing.md) for the tag workflow,
 required release notes, npm authentication, and Homebrew tap setup.
