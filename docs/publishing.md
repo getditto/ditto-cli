@@ -87,6 +87,8 @@ git commit -am "dittosh vX.Y.Z" && git push && gh pr create --fill
 
    Merge it once the tap's macOS and Linux install checks pass. Users get the
    new version with `brew update && brew upgrade getditto/tap/dittosh`.
+   Newer Homebrew versions only load formulas from trusted taps, so users run
+   `brew trust getditto/tap` once before their first install or upgrade.
 
 The workflow rejects tag/package/lock mismatches, missing notes, and commits
 outside main's history. It does not change versions or create tags for you.
@@ -295,6 +297,7 @@ npm view @dittolive/cli@X.Y.Z version dist.integrity
 npm install -g @dittolive/cli@X.Y.Z
 dittosh version
 dittosh dql doctor
+brew trust getditto/tap
 brew install getditto/tap/dittosh
 brew test getditto/tap/dittosh
 ```
@@ -304,7 +307,7 @@ putting two `dittosh` commands on the same PATH. Normal updates are:
 
 ```bash
 npm install -g @dittolive/cli@latest
-# Homebrew installations:
+# Homebrew installations (run `brew trust getditto/tap` once first):
 brew update && brew upgrade dittosh
 ```
 

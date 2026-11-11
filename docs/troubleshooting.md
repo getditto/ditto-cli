@@ -135,6 +135,7 @@ with `2> debug.log`.
 
 | What you see | What to do |
 |---|---|
+| `Refusing to load formula getditto/tap/dittosh from untrusted tap` | Newer Homebrew only loads formulas from taps you trust. Run `brew trust getditto/tap`, then install or upgrade again. |
 | `dittosh: command not found` | Follow your package manager's shell setup and open a new terminal. |
 | Store locked / exit 4 | Close the other dittosh process or shell using the same data directory, or pass `-d` to use another. |
 | Expired license | Run `dittosh update`. |
