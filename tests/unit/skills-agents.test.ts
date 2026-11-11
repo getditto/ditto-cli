@@ -1,7 +1,15 @@
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { AGENTS, detectAgents, getAgent, targetDir, targetFile } from "../../src/skills/agents.js";
+import {
+  AGENTS,
+  describeAgents,
+  detectAgents,
+  getAgent,
+  resolveAgentNames,
+  targetDir,
+  targetFile,
+} from "../../src/skills/agents.js";
 import { findInstalled, installSkill, MARKER, readMarker } from "../../src/skills/install.js";
 import { rmrf, tmpDataDir } from "../helpers/credentials.js";
 
@@ -26,6 +34,32 @@ describe("agent registry", () => {
     expect(getAgent("copilot")!.globalDir).toBeNull();
     expect(getAgent("windsurf")!.globalDir).toBeNull();
     expect(getAgent("nope")).toBeUndefined();
+  });
+
+  it("accepts the `npx skills` agent ids as aliases", () => {
+    expect(getAgent("claude-code")!.name).toBe("claude");
+    expect(getAgent("gemini-cli")!.name).toBe("gemini");
+    expect(getAgent("github-copilot")!.name).toBe("copilot");
+    expect(getAgent("antigravity-cli")!.name).toBe("antigravity");
+  });
+
+  it("no alias collides with another agent's name or alias", () => {
+    const all = AGENTS.flatMap((a) => [a.name, ...a.aliases]);
+    expect(new Set(all).size).toBe(all.length);
+  });
+
+  it("resolveAgentNames maps aliases to names, dedupes, and keeps unknown names", () => {
+    expect(resolveAgentNames(["claude-code", "claude", "nope", "gemini-cli"])).toEqual([
+      "claude",
+      "nope",
+      "gemini",
+    ]);
+  });
+
+  it("describeAgents lists aliases next to their agent", () => {
+    expect(describeAgents()).toContain("claude (claude-code)");
+    expect(describeAgents()).toContain("copilot (github-copilot)");
+    expect(describeAgents()).toContain(", codex,");
   });
 
   it("antigravity: global is ~/.gemini/config/skills, project is .agents/skills", () => {

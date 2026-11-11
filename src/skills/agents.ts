@@ -9,6 +9,11 @@ import path from "node:path";
  */
 export interface AgentSpec {
   name: string;
+  /**
+   * Other names accepted by `--agent`. Matches the agent ids used by the
+   * `npx skills` CLI (vercel-labs/skills) so users can reuse the name they know.
+   */
+  aliases: string[];
   /** Global (user-level) install dir, or null if the agent is project-only. */
   globalDir: ((home: string) => string) | null;
   /** Project-local install dir (skill root = <project>/<projectDir>/<skill>), relative to the project root. */
@@ -23,6 +28,7 @@ export interface AgentSpec {
 export const AGENTS: AgentSpec[] = [
   {
     name: "claude",
+    aliases: ["claude-code"],
     globalDir: (home) => path.join(home, ".claude", "skills"),
     projectDir: path.join(".claude", "skills"),
     globalMarkers: [(home) => path.join(home, ".claude")],
@@ -31,6 +37,7 @@ export const AGENTS: AgentSpec[] = [
   },
   {
     name: "opencode",
+    aliases: [],
     globalDir: (home) => path.join(home, ".agents", "skills"),
     projectDir: path.join(".agents", "skills"),
     globalMarkers: [
@@ -42,6 +49,7 @@ export const AGENTS: AgentSpec[] = [
   },
   {
     name: "codex",
+    aliases: [],
     globalDir: (home) => path.join(home, ".codex", "skills"),
     projectDir: path.join(".codex", "skills"),
     globalMarkers: [(home) => path.join(home, ".codex")],
@@ -50,6 +58,7 @@ export const AGENTS: AgentSpec[] = [
   },
   {
     name: "gemini",
+    aliases: ["gemini-cli"],
     globalDir: (home) => path.join(home, ".gemini", "skills"),
     projectDir: path.join(".gemini", "skills"),
     globalMarkers: [(home) => path.join(home, ".gemini")],
@@ -64,6 +73,7 @@ export const AGENTS: AgentSpec[] = [
     // explicit target so `--agent antigravity` works and detection isn't tied
     // to another agent's config).
     name: "antigravity",
+    aliases: ["antigravity-cli"],
     globalDir: (home) => path.join(home, ".gemini", "config", "skills"),
     projectDir: path.join(".agents", "skills"),
     globalMarkers: [
@@ -75,6 +85,7 @@ export const AGENTS: AgentSpec[] = [
   },
   {
     name: "cursor",
+    aliases: [],
     globalDir: null, // Cursor has no global skills dir — project rules only
     projectDir: path.join(".cursor", "rules"),
     globalMarkers: [],
@@ -83,6 +94,7 @@ export const AGENTS: AgentSpec[] = [
   },
   {
     name: "copilot",
+    aliases: ["github-copilot"],
     globalDir: null,
     // Copilot reads instruction FILES, not skill dirs — see projectFile.
     projectDir: path.join(".github", "instructions"),
@@ -92,6 +104,7 @@ export const AGENTS: AgentSpec[] = [
   },
   {
     name: "windsurf",
+    aliases: [],
     globalDir: null,
     // Windsurf reads rule FILES — see projectFile.
     projectDir: path.join(".windsurf", "rules"),
@@ -101,8 +114,25 @@ export const AGENTS: AgentSpec[] = [
   },
 ];
 
+/** Looks up an agent by its name or one of its aliases (e.g. `claude-code` → claude). */
 export function getAgent(name: string): AgentSpec | undefined {
-  return AGENTS.find((a) => a.name === name);
+  return AGENTS.find((a) => a.name === name || a.aliases.includes(name));
+}
+
+/**
+ * Turns a user's `--agent` list into canonical agent names: aliases map to the
+ * agent's name and duplicates are dropped. Unknown names pass through unchanged
+ * so the caller can report them.
+ */
+export function resolveAgentNames(names: string[]): string[] {
+  return [...new Set(names.map((n) => getAgent(n)?.name ?? n))];
+}
+
+/** "claude (claude-code), opencode, …" for help text and error details. */
+export function describeAgents(): string {
+  return AGENTS.map((a) =>
+    a.aliases.length ? `${a.name} (${a.aliases.join(", ")})` : a.name,
+  ).join(", ");
 }
 
 /**
