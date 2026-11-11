@@ -689,6 +689,15 @@ dittosh skills add swift-sdk --agent codex --project "$DITTOSH_TUTORIAL/agent-pr
 
 # Antigravity: Kotlin SDK guidance
 dittosh skills add kotlin-sdk --agent antigravity --project "$DITTOSH_TUTORIAL/agent-project"
+
+# Claude Code: JavaScript and TypeScript guidance (Node.js, web, React Native, Expo)
+dittosh skills add js-sdk --agent claude --project "$DITTOSH_TUTORIAL/agent-project"
+`),
+        text(`
+Some skills link to other skills, and those links only work when both are
+installed. \`dittosh skills add\` installs the linked skills too and lists them.
+For example, \`js-sdk\` brings the Node.js, web, React Native, and Expo skills
+and \`native-app-config\`. Add \`--no-deps\` to install only the named skill.
 `),
         text("Check what was installed:"),
         shManual(`dittosh skills list --project "$DITTOSH_TUTORIAL/agent-project"`),

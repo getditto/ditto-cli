@@ -182,7 +182,9 @@ The full file format, the order of steps, and how to build a benchmark file are 
 
 ```bash
 dittosh skills add                    # install the default skill (write-dql) into all detected agents
-dittosh skills add swift-sdk          # install a named skill
+dittosh skills add swift-sdk          # install a named skill (and the skills it links to)
+dittosh skills add js-sdk             # JavaScript/TypeScript: installs every js-* skill and native-app-config
+dittosh skills add js-node --no-deps  # just the named skill, without its companions
 dittosh skills add --all              # install every skill the upstream repo ships
 dittosh skills add --project .        # project-local install
 dittosh skills add --agent claude,opencode   # specific agents
@@ -193,7 +195,9 @@ dittosh skills update --all           # refresh every installed skill (shows cur
 dittosh skills versions               # list published releases (newest = latest)
 ```
 
-Skills come from the upstream [`getditto/agent-skills`](https://github.com/getditto/agent-skills) repo (`write-dql`, `swift-sdk`, `kotlin-sdk`, `data-modeling`, `data-streams`, `ditto-mesh-networking`, `sync-subscriptions`, …). Tagged releases serve a slim skills-only archive; until a release exists, installs track the `main` branch snapshot. The set of skills is read from the archive at runtime, so new upstream skills work with no CLI update.
+Skills come from the upstream [`getditto/agent-skills`](https://github.com/getditto/agent-skills) repo (`write-dql`, `swift-sdk`, `kotlin-sdk`, `js-sdk`, `js-node`, `js-web`, `js-react-native`, `js-expo`, `native-app-config`, `data-modeling`, `data-streams`, `ditto-mesh-networking`, `sync-subscriptions`, …). Tagged releases serve a slim skills-only archive; until a release exists, installs track the `main` branch snapshot. The set of skills is read from the archive at runtime, so new upstream skills work with no CLI update.
+
+Companion skills: some skills link to files in other skills with relative paths (`../js-sdk/assets/runtime.ts`). Those links only resolve when both skills are installed side by side, so `add` reads the links and installs the linked skills too, following links transitively. In agent-skills v0.6.0, any `js-*` skill pulls in the whole JavaScript family (`js-sdk`, `js-node`, `js-web`, `js-react-native`, `js-expo`) plus `native-app-config`; `swift-sdk` pulls in `native-app-config`; `data-streams` pulls in `kotlin-sdk`, `swift-sdk`, and (through `swift-sdk`) `native-app-config`; `data-modeling` pulls in `write-dql`. Companions that are already installed show as `present`. `--no-deps` turns this off and is remembered: `update` then leaves that install's companions alone. Otherwise `update` installs companions that a newer release adds (`update --no-deps` skips that for one run). Copilot and Windsurf get one flattened instruction file per skill, so links to other files can't resolve there; companions are not installed for them.
 
 Semantics: `add` never upgrades an existing install (it skips; `--force` overwrites) — `update` is the version-moving command and skips the download entirely when everything is current. `update` refreshes all installs of a skill across agents (no `--agent` filter); use `--project` to scope to project-local installs. The old `dql` skill name still works as an alias for `write-dql`, and `update` migrates `dql`-era installs to the new name.
 

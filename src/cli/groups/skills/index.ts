@@ -4,7 +4,14 @@ import path from "node:path";
 import chalk from "chalk";
 import { type Command, Option } from "commander";
 import { FormatError, renderRows, resolveFormat } from "../../../render/output.js";
-import { AGENTS, type AgentSpec, detectAgents, getAgent } from "../../../skills/agents.js";
+import {
+  AGENTS,
+  type AgentSpec,
+  detectAgents,
+  getAgent,
+  isSingleFile,
+} from "../../../skills/agents.js";
+import { withCompanions } from "../../../skills/companions.js";
 import { cleanupStaging, extractSkills, listSkills } from "../../../skills/fetch.js";
 import {
   fetchTarball,
@@ -111,7 +118,9 @@ export function registerSkillsGroup(
   skills: ReturnType<Command["command"]>,
   deps: SkillsDeps = realDeps,
 ): void {
-  skills.description("Install Ditto agent skills (Swift, Kotlin, DQL, …) into AI coding agents");
+  skills.description(
+    "Install Ditto agent skills (DQL, Swift, Kotlin, JavaScript, …) into AI coding agents",
+  );
 
   skills
     .command("add [name]")
@@ -122,11 +131,18 @@ export function registerSkillsGroup(
     .option("--project <path>", "install into a project instead of globally")
     .option("--ref <tag>", "install a specific release instead of the latest")
     .option("--force", "overwrite an existing install", false)
+    .option("--no-deps", "skip the companion skills this skill links to")
     .option("--format <format>", "table | json | csv")
     .action(
       async (
         name: string | undefined,
-        opts: NameOpts & { agent?: string; project?: string; force: boolean; format?: string },
+        opts: NameOpts & {
+          agent?: string;
+          project?: string;
+          force: boolean;
+          deps: boolean;
+          format?: string;
+        },
       ) => {
         // Usage validation first.
         let format: ReturnType<typeof resolveFormat>;
@@ -168,6 +184,7 @@ export function registerSkillsGroup(
         if (!bundle) return;
 
         let names: string[];
+        let companions = new Set<string>();
         if (opts.all) {
           names = bundle.available;
           note(`Installing all ${names.length} skills: ${names.join(", ")}`);
@@ -184,19 +201,47 @@ export function registerSkillsGroup(
           names = [skillName!];
         }
 
+        // With companions on, extract everything so links can be read; the
+        // archive is small and the staging dir is removed either way.
+        const extractAll = !opts.all && opts.deps;
         let dirs: Map<string, string>;
         try {
-          dirs = await extractSkills(bundle.tarball, names);
+          dirs = await extractSkills(bundle.tarball, extractAll ? bundle.available : names);
         } catch (err) {
           if (mapFetchError(err)) return;
           throw err;
         }
         const firstDir = dirs.values().next().value;
         try {
+          const linkable = selected.some((n) => {
+            const agent = getAgent(n);
+            return agent !== undefined && !isSingleFile(agent, scope);
+          });
+          if (extractAll && linkable) {
+            names = withCompanions(names, dirs);
+            companions = new Set(names.slice(1));
+            if (companions.size > 0) {
+              note(
+                `${skillName} links to companion skill${companions.size === 1 ? "" : "s"} ${[
+                  ...companions,
+                ].join(
+                  ", ",
+                )} — installing ${companions.size === 1 ? "it" : "them"} too (--no-deps to skip)`,
+              );
+            }
+          }
           const rows: Record<string, unknown>[] = [];
           let failures = 0;
           for (const n of names) {
-            const results = selected.map((agentName) => {
+            // Copilot/Windsurf get one flattened file per skill: links can't
+            // resolve there, so companions would only add noise.
+            const agentsFor = companions.has(n)
+              ? selected.filter((a) => {
+                  const agent = getAgent(a);
+                  return agent !== undefined && !isSingleFile(agent, scope);
+                })
+              : selected;
+            const results = agentsFor.map((agentName) => {
               const agent = getAgent(agentName);
               if (!agent) {
                 return {
@@ -209,18 +254,23 @@ export function registerSkillsGroup(
               return installSkill(dirs.get(n)!, n, agent, bundle.ref, {
                 ...scope,
                 force: opts.force,
+                deps: opts.deps,
               });
             });
             for (const r of results) {
+              // A companion that's already there is fine: the link resolves.
+              const present = !r.ok && r.exists === true && companions.has(n);
               rows.push({
                 skill: n,
                 agent: r.agent,
-                status: r.ok ? "installed" : "skipped",
+                status: r.ok ? "installed" : present ? "present" : "skipped",
                 ref: bundle.ref,
                 where: r.target || "—",
-                detail: r.detail ?? "",
+                detail: present
+                  ? `companion of ${skillName}, already installed`
+                  : (r.detail ?? (companions.has(n) ? `companion of ${skillName}` : "")),
               });
-              if (!r.ok) failures++;
+              if (!r.ok && !present) failures++;
             }
           }
           console.log(renderRows(rows, format));
@@ -231,7 +281,9 @@ export function registerSkillsGroup(
               ),
             );
           }
-          if (failures === rows.length) process.exitCode = 2;
+          if (failures > 0 && failures === rows.filter((r) => r.status !== "present").length) {
+            process.exitCode = 2;
+          }
         } finally {
           if (firstDir) cleanupStaging(firstDir);
         }
@@ -292,9 +344,13 @@ export function registerSkillsGroup(
     .option("--all", "update every installed skill", false)
     .option("--ref <tag>", "move installs to a specific release (upgrade or downgrade)")
     .option("--project <path>", "update project-local installs instead of global")
+    .option("--no-deps", "don't add companion skills the new release links to")
     .option("--format <format>", "table | json | csv")
     .action(
-      async (name: string | undefined, opts: NameOpts & { project?: string; format?: string }) => {
+      async (
+        name: string | undefined,
+        opts: NameOpts & { project?: string; deps: boolean; format?: string },
+      ) => {
         let format: ReturnType<typeof resolveFormat>;
         try {
           format = resolveFormat(opts.format);
@@ -306,7 +362,15 @@ export function registerSkillsGroup(
         if (!opts.all && !skillName) return;
 
         // Find installed copies (global or project).
-        const found: { agent: AgentSpec; skill: string; target: string; ref?: string }[] = [];
+        const found: {
+          agent: AgentSpec;
+          skill: string;
+          target: string;
+          ref?: string;
+          deps: boolean;
+        }[] = [];
+        // Every installed skill per agent, to tell which companions are missing.
+        const installedBy = new Map<string, Set<string>>();
         for (const agent of AGENTS) {
           const dir = opts.project
             ? agent.projectDir
@@ -317,12 +381,22 @@ export function registerSkillsGroup(
               : null;
           if (!dir) continue;
           for (const f of findInstalled(dir)) {
+            const have = installedBy.get(agent.name) ?? new Set<string>();
+            have.add(canonicalQuiet(f.skill));
+            installedBy.set(agent.name, have);
             if (opts.all || canonicalQuiet(f.skill) === skillName) {
-              found.push({ agent, skill: f.skill, target: f.path, ref: f.marker?.ref });
+              found.push({
+                agent,
+                skill: f.skill,
+                target: f.path,
+                ref: f.marker?.ref,
+                deps: f.marker?.deps !== false,
+              });
             }
           }
         }
         const what = opts.all ? "any skill" : skillName;
+        const whatInstalls = opts.all ? "installed skills are" : `${skillName} installs are`;
         if (found.length === 0) {
           if (format === "json") console.log("[]");
           else console.log(`(no ${what} installed — use \`dittosh skills add\`)`);
@@ -336,7 +410,7 @@ export function registerSkillsGroup(
 
         const stale = found.filter((f) => f.ref !== targetRef);
         if (stale.length === 0) {
-          console.log(`all ${what} installs already on ${targetRef}`);
+          console.log(`all ${whatInstalls} already on ${targetRef}`);
           return;
         }
         note(
@@ -345,39 +419,103 @@ export function registerSkillsGroup(
 
         const bundle = await downloadBundle(deps, targetRef);
         if (!bundle) return;
+        if (bundle.available.length === 0) {
+          console.error(chalk.red(`${bundle.ref} ships no skills — nothing to update`));
+          process.exitCode = 2;
+          return;
+        }
 
-        // Extract each stale skill once (canonical names — aliases map upstream).
-        const staleNames = [...new Set(stale.map((f) => canonicalQuiet(f.skill)))];
+        // Extract the whole bundle: stale skills are reinstalled from it, and
+        // their links decide which missing companions to add.
         let dirs: Map<string, string>;
         try {
-          dirs = await extractSkills(bundle.tarball, staleNames);
+          dirs = await extractSkills(bundle.tarball, bundle.available);
         } catch (err) {
           if (mapFetchError(err)) return;
           throw err;
         }
         const firstDir = dirs.values().next().value;
         try {
-          const rows = stale.map(({ agent, skill, target, ref: current }) => {
+          const updated = new Set<number>();
+          const rows: Record<string, unknown>[] = stale.map(
+            ({ agent, skill, target, ref: current, deps: keepDeps }, i) => {
+              const upstream = canonicalQuiet(skill);
+              const dir = dirs.get(upstream);
+              if (!dir) {
+                return {
+                  skill: upstream,
+                  agent: agent.name,
+                  status: "skipped",
+                  where: target,
+                  detail: `${bundle.ref} has no ${upstream} skill`,
+                };
+              }
+              const r = installSkill(dir, upstream, agent, bundle.ref, {
+                home: deps.home,
+                project: opts.project,
+                force: true,
+                deps: keepDeps && opts.deps,
+              });
+              if (r.ok) updated.add(i);
+              // Alias migration: remove the old-name install after a successful swap.
+              if (r.ok && upstream !== skill) {
+                fs.rmSync(target, { recursive: true, force: true });
+              }
+              return {
+                skill: upstream,
+                agent: agent.name,
+                status: r.ok ? "updated" : "skipped",
+                where: r.ok ? r.target : target,
+                detail: r.ok ? `${current ?? "unknown"} → ${bundle.ref}` : (r.detail ?? ""),
+              };
+            },
+          );
+
+          // Companions: a newer release can link an installed skill to a skill
+          // that isn't installed yet (e.g. swift-sdk → native-app-config).
+          // Skipped when the install opted out (--no-deps now or at add time),
+          // when its own update failed, and for single-file agents.
+          const added = new Set<string>();
+          stale.forEach(({ agent, skill, deps: keepDeps }, i) => {
+            if (!opts.deps || !keepDeps || !updated.has(i)) return;
+            if (isSingleFile(agent, { project: opts.project })) return;
             const upstream = canonicalQuiet(skill);
-            const r = installSkill(dirs.get(upstream)!, upstream, agent, bundle.ref, {
-              home: deps.home,
-              project: opts.project,
-              force: true,
-            });
-            // Alias migration: remove the old-name install after a successful swap.
-            if (r.ok && upstream !== skill) {
-              fs.rmSync(target, { recursive: true, force: true });
+            const have = installedBy.get(agent.name) ?? new Set<string>();
+            for (const extra of withCompanions([upstream], dirs).slice(1)) {
+              if (have.has(extra)) continue;
+              have.add(extra);
+              installedBy.set(agent.name, have);
+              const r = installSkill(dirs.get(extra)!, extra, agent, bundle.ref, {
+                home: deps.home,
+                project: opts.project,
+              });
+              // Agents that share a directory (opencode/antigravity in a
+              // project) see the copy another agent just installed.
+              const present = !r.ok && r.exists === true;
+              if (r.ok) added.add(extra);
+              rows.push({
+                skill: extra,
+                agent: agent.name,
+                status: r.ok ? "installed" : present ? "present" : "skipped",
+                where: r.target || "—",
+                detail: present
+                  ? `companion of ${upstream}, already installed`
+                  : r.ok
+                    ? `companion of ${upstream}`
+                    : (r.detail ?? ""),
+              });
             }
-            return {
-              skill: upstream,
-              agent: agent.name,
-              status: r.ok ? "updated" : "skipped",
-              where: r.ok ? r.target : target,
-              detail: r.ok ? `${current ?? "unknown"} → ${bundle.ref}` : (r.detail ?? ""),
-            };
           });
+          if (added.size > 0) {
+            note(
+              `${bundle.ref} links updated skills to ${[...added].sort().join(", ")} — installed ${
+                added.size === 1 ? "it" : "them"
+              } too (--no-deps to skip)`,
+            );
+          }
+
           console.log(renderRows(rows, format));
-          const failures = rows.filter((r) => r.status !== "updated").length;
+          const failures = rows.filter((r) => r.status === "skipped").length;
           if (failures === rows.length) process.exitCode = 2;
         } finally {
           if (firstDir) cleanupStaging(firstDir);

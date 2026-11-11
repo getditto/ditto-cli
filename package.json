@@ -1,6 +1,6 @@
 {
   "name": "@dittolive/cli",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "dittosh — the Ditto CLI: run DQL against a local Ditto store, load sample datasets, and install DQL skills for AI agents",
   "license": "MIT",
   "repository": {

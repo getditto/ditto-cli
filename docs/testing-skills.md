@@ -147,6 +147,36 @@ next to the skill files — that's what `list`/`update` read.
   Expect: one row per upstream skill (write-dql, swift-sdk, kotlin-sdk, …),
   all `installed`. One fetch (stderr shows a single `Fetching…`).
 
+- [ ] **Companion skills install together (agent-skills v0.6.0+)**
+  ```bash
+  rm -rf /tmp/mt-skills/.claude/skills
+  dittosh skills add js-node --project /tmp/mt-skills --agent claude
+  ```
+  Expect: stderr note `js-node links to companion skills js-expo,
+  js-react-native, js-sdk, js-web, native-app-config — installing them too
+  (--no-deps to skip)`.
+  Six `installed` rows; companions have detail `companion of js-node`. Then
+  `dittosh skills add swift-sdk --project /tmp/mt-skills --agent claude` shows
+  `native-app-config` as `present`, exit 0.
+
+- [ ] **`--no-deps` installs only the named skill**
+  ```bash
+  rm -rf /tmp/mt-skills/.claude/skills
+  dittosh skills add js-expo --no-deps --project /tmp/mt-skills --agent claude
+  ```
+  Expect: one row; only `.claude/skills/js-expo/` exists, and its
+  `.dql-skill.json` has `"deps": false`. A later
+  `dittosh skills update js-expo --project /tmp/mt-skills --ref <older-or-newer tag>`
+  updates only js-expo and adds no companions.
+
+- [ ] **No companions for Copilot/Windsurf**
+  ```bash
+  mkdir -p /tmp/mt-skills/.github
+  dittosh skills add js-web --project /tmp/mt-skills --agent copilot,claude
+  ```
+  Expect: claude gets all six JS skills; copilot gets only
+  `.github/instructions/js-web.instructions.md`.
+
 - [ ] **Unknown skill lists what's available**
   ```bash
   dittosh skills add nope --project /tmp/mt-skills --agent claude
