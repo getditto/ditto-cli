@@ -22,7 +22,8 @@ Prereqs:
   ```
 
 Known agents (for `--agent`): `claude`, `opencode`, `codex`, `gemini`,
-`antigravity`, `cursor`, `copilot`, `windsurf`. Global installs go under the agent's home
+`antigravity`, `cursor`, `copilot`, `windsurf`. The `npx skills` ids work too as
+aliases: `claude-code`, `gemini-cli`, `antigravity-cli`, `github-copilot`. Global installs go under the agent's home
 dir (`~/.claude/skills`, `~/.agents/skills`, …); `cursor`/`copilot`/
 `windsurf` are project-only. Every install drops a `.dql-skill.json` marker
 next to the skill files — that's what `list`/`update` read.

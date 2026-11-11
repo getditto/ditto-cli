@@ -254,6 +254,16 @@ describe("ditto skills add (injected deps)", () => {
     expect(fs.existsSync(path.join(home, ".codex", "skills", "write-dql"))).toBe(false);
   });
 
+  it("--agent accepts aliases like claude-code and installs once per agent", async () => {
+    const { program } = await buildCli({ tarball: await skillTarball() });
+    await program.parseAsync(["node", "ditto", "skills", "add", "--agent", "claude-code,claude"]);
+    expect(fs.existsSync(path.join(home, ".claude", "skills", "write-dql", "SKILL.md"))).toBe(true);
+    expect(stdout()).toContain("claude");
+    expect(stdout()).not.toContain("claude-code");
+    expect(stdout()).not.toContain("already installed");
+    expect(process.exitCode).toBeUndefined();
+  });
+
   it("--project installs project-locally", async () => {
     const proj = tmpDataDir("ditto-proj-");
     try {

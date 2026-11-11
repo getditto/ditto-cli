@@ -7,9 +7,11 @@ import { FormatError, renderRows, resolveFormat } from "../../../render/output.j
 import {
   AGENTS,
   type AgentSpec,
+  describeAgents,
   detectAgents,
   getAgent,
   isSingleFile,
+  resolveAgentNames,
 } from "../../../skills/agents.js";
 import { withCompanions } from "../../../skills/companions.js";
 import { cleanupStaging, extractSkills, listSkills } from "../../../skills/fetch.js";
@@ -163,10 +165,12 @@ export function registerSkillsGroup(
         // Agent selection: explicit list wins; otherwise all detected.
         const scope = { home: deps.home, project: opts.project };
         const selected = opts.agent
-          ? opts.agent
-              .split(",")
-              .map((n) => n.trim())
-              .filter(Boolean)
+          ? resolveAgentNames(
+              opts.agent
+                .split(",")
+                .map((n) => n.trim())
+                .filter(Boolean),
+            )
           : detectAgents(scope).map((a) => a.name);
         if (selected.length === 0) {
           console.error(
@@ -248,7 +252,7 @@ export function registerSkillsGroup(
                   agent: agentName,
                   target: "",
                   ok: false,
-                  detail: `unknown agent (known: ${AGENTS.map((a) => a.name).join(", ")})`,
+                  detail: `unknown agent (known: ${describeAgents()})`,
                 };
               }
               return installSkill(dirs.get(n)!, n, agent, bundle.ref, {
