@@ -18,8 +18,11 @@ $ dittosh dql "SELECT _id.title, _id.year, rated FROM movies WHERE _id.year > '2
 
 ```bash
 npm i -g @dittolive/cli          # npm (primary)
-brew install getditto/tap/dittosh # Homebrew (macOS/Linux)
+brew trust getditto/tap           # Homebrew (macOS/Linux): trust the tap once,
+brew install getditto/tap/dittosh # then install
 ```
+
+Newer Homebrew versions refuse to load formulas from a third-party tap until you trust it. If `brew` reports `Refusing to load formula getditto/tap/dittosh from untrusted tap`, run `brew trust getditto/tap` and try again.
 
 The binary is `dittosh`. Requires Node.js ≥ 22 for npm installs; Homebrew manages Node.js 24. Supported platforms (matching the Ditto Node SDK): **macOS arm64, Linux x64/arm64, Windows x64**. Intel Macs (darwin-x64) are not supported by SDK 5.2.0. Homebrew installs only your platform's copy of the Ditto SDK (about 150 MB on macOS, 180 MB on Linux); npm installs include every platform's (about 420 MB).
 
