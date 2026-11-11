@@ -64,6 +64,7 @@ export async function extractSkills(
   tarball: Buffer,
   names: string[],
 ): Promise<Map<string, string>> {
+  if (names.length === 0) return new Map(); // nothing to stage, nothing to clean up
   const wanted = new Set(names);
   const { staging, tgz } = stageTarball(tarball);
   const raw = path.join(staging, "raw");

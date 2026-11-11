@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { Command } from "commander";
 import * as tar from "tar";
@@ -32,6 +33,40 @@ async function skillTarball(): Promise<Buffer> {
   fs.writeFileSync(path.join(src, root, "skills", "no-skillmd", "README.md"), "# not a skill\n");
   const tgz = path.join(tmpDataDir("ditto-tar-"), "repo.tar.gz");
   await tar.c({ file: tgz, cwd: src }, [root]);
+  const buf = fs.readFileSync(tgz);
+  rmrf(src);
+  rmrf(path.dirname(tgz));
+  return buf;
+}
+
+/**
+ * A release-asset-shaped tarball (skills/ at the root) mirroring the
+ * agent-skills v0.6.0 JavaScript family: each skill links to its companions
+ * with relative paths.
+ */
+async function jsTarball(): Promise<Buffer> {
+  const src = tmpDataDir("ditto-js-tar-src-");
+  const files: Record<string, Record<string, string>> = {
+    "write-dql": { "SKILL.md": "# write-dql\n" },
+    "js-node": { "SKILL.md": "See [js-sdk](../js-sdk/SKILL.md).\n" },
+    "js-sdk": {
+      "SKILL.md": "Platforms: [node](../js-node/SKILL.md), [web](../js-web/SKILL.md).\n",
+      "references/setup.md": "Permissions: [config](../native-app-config/SKILL.md)\n",
+      "assets/runtime.ts": "export const runtime = 1;\n",
+    },
+    "js-web": { "SKILL.md": "Uses [runtime](../js-sdk/assets/runtime.ts).\n" },
+    "native-app-config": { "SKILL.md": "# native-app-config\n" },
+    "swift-sdk": { "SKILL.md": "Permissions: [config](../native-app-config/SKILL.md)\n" },
+  };
+  for (const [name, contents] of Object.entries(files)) {
+    for (const [rel, text] of Object.entries(contents)) {
+      const full = path.join(src, "skills", name, rel);
+      fs.mkdirSync(path.dirname(full), { recursive: true });
+      fs.writeFileSync(full, text, "utf8");
+    }
+  }
+  const tgz = path.join(tmpDataDir("ditto-js-tar-"), "ditto-skills.tar.gz");
+  await tar.c({ file: tgz, gzip: true, cwd: src }, ["skills"]);
   const buf = fs.readFileSync(tgz);
   rmrf(src);
   rmrf(path.dirname(tgz));
@@ -542,5 +577,322 @@ describe("ditto skills — branch matrix", () => {
     } finally {
       fs.chmodSync(parent, 0o755);
     }
+  });
+});
+
+describe("ditto skills companions (JavaScript family)", () => {
+  const installed = (name: string) =>
+    fs.existsSync(path.join(home, ".claude", "skills", name, "SKILL.md"));
+
+  it("add js-node also installs the skills it links to, transitively", async () => {
+    fs.mkdirSync(path.join(home, ".claude"), { recursive: true });
+    const { program } = await buildCli({ tarball: await jsTarball() });
+    await program.parseAsync(["node", "ditto", "skills", "add", "js-node", "--agent", "claude"]);
+    expect(process.exitCode).toBeUndefined();
+    for (const name of ["js-node", "js-sdk", "js-web", "native-app-config"]) {
+      expect(installed(name)).toBe(true);
+    }
+    expect(installed("write-dql")).toBe(false);
+    expect(installed("swift-sdk")).toBe(false);
+    // the linked asset is where js-web's relative link points
+    expect(
+      fs.existsSync(
+        path.join(home, ".claude", "skills", "js-web", "..", "js-sdk", "assets", "runtime.ts"),
+      ),
+    ).toBe(true);
+    expect(stderr()).toContain(
+      "js-node links to companion skills js-sdk, js-web, native-app-config",
+    );
+    expect(stdout()).toContain("companion of js-node");
+  });
+
+  it("--no-deps installs only the named skill", async () => {
+    fs.mkdirSync(path.join(home, ".claude"), { recursive: true });
+    const { program } = await buildCli({ tarball: await jsTarball() });
+    await program.parseAsync([
+      "node",
+      "ditto",
+      "skills",
+      "add",
+      "js-node",
+      "--no-deps",
+      "--agent",
+      "claude",
+    ]);
+    expect(process.exitCode).toBeUndefined();
+    expect(installed("js-node")).toBe(true);
+    expect(installed("js-sdk")).toBe(false);
+  });
+
+  it("companions already installed are reported as present, not failures", async () => {
+    fs.mkdirSync(path.join(home, ".claude"), { recursive: true });
+    const first = await buildCli({ tarball: await jsTarball() });
+    await first.program.parseAsync([
+      "node",
+      "ditto",
+      "skills",
+      "add",
+      "js-sdk",
+      "--agent",
+      "claude",
+    ]);
+    outSpy.mockClear();
+    errSpy.mockClear();
+    const { program } = await buildCli({ tarball: await jsTarball() });
+    await program.parseAsync([
+      "node",
+      "ditto",
+      "skills",
+      "add",
+      "swift-sdk",
+      "--agent",
+      "claude",
+      "--format",
+      "json",
+    ]);
+    expect(process.exitCode).toBeUndefined();
+    const rows = JSON.parse(stdout()) as { skill: string; status: string }[];
+    expect(rows).toEqual([
+      expect.objectContaining({ skill: "swift-sdk", status: "installed" }),
+      expect.objectContaining({ skill: "native-app-config", status: "present" }),
+    ]);
+    expect(stderr()).not.toContain("skipped");
+  });
+
+  it("update adds companions a newer release links to", async () => {
+    // swift-sdk installed from a release that had no native-app-config link.
+    fs.mkdirSync(path.join(home, ".claude"), { recursive: true });
+    const old = await buildCli({ tarball: await skillTarball(), ref: "v0.5.0" });
+    await old.program.parseAsync([
+      "node",
+      "ditto",
+      "skills",
+      "add",
+      "swift-sdk",
+      "--agent",
+      "claude",
+    ]);
+    expect(installed("native-app-config")).toBe(false);
+    outSpy.mockClear();
+    const next = await buildCli({ tarball: await jsTarball(), ref: "v0.6.0" });
+    await next.program.parseAsync(["node", "ditto", "skills", "update", "swift-sdk"]);
+    expect(process.exitCode).toBeUndefined();
+    expect(installed("native-app-config")).toBe(true);
+    const marker = JSON.parse(
+      fs.readFileSync(
+        path.join(home, ".claude", "skills", "native-app-config", ".dql-skill.json"),
+        "utf8",
+      ),
+    );
+    expect(marker.ref).toBe("v0.6.0");
+    expect(stdout()).toContain("v0.5.0 → v0.6.0");
+    expect(stdout()).toContain("companion of swift-sdk");
+  });
+
+  it("update skips a skill the target release no longer ships", async () => {
+    fs.mkdirSync(path.join(home, ".claude"), { recursive: true });
+    const old = await buildCli({ tarball: await skillTarball(), ref: "v0.5.0" });
+    await old.program.parseAsync([
+      "node",
+      "ditto",
+      "skills",
+      "add",
+      "kotlin-sdk",
+      "--agent",
+      "claude",
+    ]);
+    outSpy.mockClear();
+    const next = await buildCli({ tarball: await jsTarball(), ref: "v0.6.0" });
+    await next.program.parseAsync(["node", "ditto", "skills", "update", "kotlin-sdk"]);
+    expect(stdout()).toContain("v0.6.0 has no kotlin-sdk skill");
+    expect(process.exitCode).toBe(2);
+  });
+
+  it("update --all says installed skills are already current", async () => {
+    fs.mkdirSync(path.join(home, ".claude"), { recursive: true });
+    const first = await buildCli({ tarball: await jsTarball() });
+    await first.program.parseAsync([
+      "node",
+      "ditto",
+      "skills",
+      "add",
+      "js-web",
+      "--agent",
+      "claude",
+    ]);
+    outSpy.mockClear();
+    const same = await buildCli({ tarball: await jsTarball() });
+    await same.program.parseAsync(["node", "ditto", "skills", "update", "--all"]);
+    expect(stdout()).toBe("all installed skills are already on v9.9.9");
+  });
+});
+
+describe("ditto skills companions (review fixes)", () => {
+  const readMarker = (dir: string) =>
+    JSON.parse(fs.readFileSync(path.join(dir, ".dql-skill.json"), "utf8"));
+
+  it("add --no-deps is remembered: a later update adds no companions", async () => {
+    fs.mkdirSync(path.join(home, ".claude"), { recursive: true });
+    const old = await buildCli({ tarball: await skillTarball(), ref: "v0.5.0" });
+    await old.program.parseAsync([
+      "node",
+      "ditto",
+      "skills",
+      "add",
+      "swift-sdk",
+      "--no-deps",
+      "--agent",
+      "claude",
+    ]);
+    const target = path.join(home, ".claude", "skills", "swift-sdk");
+    expect(readMarker(target).deps).toBe(false);
+    const next = await buildCli({ tarball: await jsTarball(), ref: "v0.6.0" });
+    await next.program.parseAsync(["node", "ditto", "skills", "update", "swift-sdk"]);
+    expect(process.exitCode).toBeUndefined();
+    expect(readMarker(target).ref).toBe("v0.6.0");
+    expect(readMarker(target).deps).toBe(false); // still opted out after the update
+    expect(fs.existsSync(path.join(home, ".claude", "skills", "native-app-config"))).toBe(false);
+  });
+
+  it("update --no-deps skips companions for this run only", async () => {
+    fs.mkdirSync(path.join(home, ".claude"), { recursive: true });
+    const old = await buildCli({ tarball: await skillTarball(), ref: "v0.5.0" });
+    await old.program.parseAsync([
+      "node",
+      "ditto",
+      "skills",
+      "add",
+      "swift-sdk",
+      "--agent",
+      "claude",
+    ]);
+    const next = await buildCli({ tarball: await jsTarball(), ref: "v0.6.0" });
+    await next.program.parseAsync(["node", "ditto", "skills", "update", "swift-sdk", "--no-deps"]);
+    expect(fs.existsSync(path.join(home, ".claude", "skills", "native-app-config"))).toBe(false);
+    expect(readMarker(path.join(home, ".claude", "skills", "swift-sdk")).deps).toBe(false);
+  });
+
+  it("update notes the companions it installs", async () => {
+    fs.mkdirSync(path.join(home, ".claude"), { recursive: true });
+    const old = await buildCli({ tarball: await skillTarball(), ref: "v0.5.0" });
+    await old.program.parseAsync([
+      "node",
+      "ditto",
+      "skills",
+      "add",
+      "swift-sdk",
+      "--agent",
+      "claude",
+    ]);
+    errSpy.mockClear();
+    const next = await buildCli({ tarball: await jsTarball(), ref: "v0.6.0" });
+    await next.program.parseAsync(["node", "ditto", "skills", "update", "swift-sdk"]);
+    expect(stderr()).toContain("v0.6.0 links updated skills to native-app-config");
+  });
+
+  it("update reports a companion in a shared dir as present, not skipped", async () => {
+    // opencode and antigravity share .agents/skills in a project.
+    const proj = tmpDataDir("ditto-shared-");
+    try {
+      const old = await buildCli({ tarball: await skillTarball(), ref: "v0.5.0" });
+      await old.program.parseAsync([
+        "node",
+        "ditto",
+        "skills",
+        "add",
+        "swift-sdk",
+        "--project",
+        proj,
+        "--agent",
+        "opencode",
+      ]);
+      outSpy.mockClear();
+      const next = await buildCli({ tarball: await jsTarball(), ref: "v0.6.0" });
+      await next.program.parseAsync([
+        "node",
+        "ditto",
+        "skills",
+        "update",
+        "swift-sdk",
+        "--project",
+        proj,
+        "--format",
+        "json",
+      ]);
+      expect(process.exitCode).toBeUndefined();
+      const rows = JSON.parse(stdout()) as { skill: string; agent: string; status: string }[];
+      const companionRows = rows.filter((r) => r.skill === "native-app-config");
+      expect(companionRows.map((r) => r.status).sort()).toEqual(["installed", "present"]);
+      expect(rows.some((r) => r.status === "skipped")).toBe(false);
+    } finally {
+      rmrf(proj);
+    }
+  });
+
+  it("copilot and windsurf get only the named skill, no companions", async () => {
+    const proj = tmpDataDir("ditto-single-");
+    try {
+      const { program } = await buildCli({ tarball: await jsTarball() });
+      await program.parseAsync([
+        "node",
+        "ditto",
+        "skills",
+        "add",
+        "js-web",
+        "--project",
+        proj,
+        "--agent",
+        "copilot,windsurf,claude",
+      ]);
+      expect(process.exitCode).toBeUndefined();
+      const instructions = fs.readdirSync(path.join(proj, ".github", "instructions"));
+      expect(instructions).toEqual(["js-web.instructions.md"]);
+      expect(fs.readdirSync(path.join(proj, ".windsurf", "rules"))).toEqual(["js-web.md"]);
+      expect(fs.existsSync(path.join(proj, ".claude", "skills", "js-sdk", "SKILL.md"))).toBe(true);
+    } finally {
+      rmrf(proj);
+    }
+  });
+
+  it("copilot-only installs print no companion note", async () => {
+    const proj = tmpDataDir("ditto-single-");
+    try {
+      const { program } = await buildCli({ tarball: await jsTarball() });
+      await program.parseAsync([
+        "node",
+        "ditto",
+        "skills",
+        "add",
+        "js-web",
+        "--project",
+        proj,
+        "--agent",
+        "copilot",
+      ]);
+      expect(stderr()).not.toContain("companion");
+    } finally {
+      rmrf(proj);
+    }
+  });
+
+  it("update against a release with no skills exits 2 without leaking a temp dir", async () => {
+    fs.mkdirSync(path.join(home, ".claude"), { recursive: true });
+    const old = await buildCli({ tarball: await skillTarball(), ref: "v0.5.0" });
+    await old.program.parseAsync(["node", "ditto", "skills", "add", "--agent", "claude"]);
+    const src = tmpDataDir("ditto-empty-src-");
+    fs.mkdirSync(path.join(src, "skills", "foo"), { recursive: true });
+    fs.writeFileSync(path.join(src, "skills", "foo", "README.md"), "# not a skill\n");
+    const tgz = path.join(src, "empty.tar.gz");
+    await tar.c({ file: tgz, gzip: true, cwd: src }, ["skills"]);
+    const empty = fs.readFileSync(tgz);
+    rmrf(src);
+    const tmp = os.tmpdir();
+    const before = fs.readdirSync(tmp).filter((n) => n.startsWith("ditto-skill-")).length;
+    const next = await buildCli({ tarball: empty, ref: "v9.0.0" });
+    await next.program.parseAsync(["node", "ditto", "skills", "update"]);
+    expect(process.exitCode).toBe(2);
+    expect(stderr()).toContain("v9.0.0 ships no skills");
+    const after = fs.readdirSync(tmp).filter((n) => n.startsWith("ditto-skill-")).length;
+    expect(after).toBe(before);
   });
 });

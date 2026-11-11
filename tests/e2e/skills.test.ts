@@ -252,3 +252,56 @@ describe("e2e: ditto skills (fixture tarball seam)", () => {
     expect(r.stdout).toBe("");
   });
 });
+
+describe("e2e: ditto skills companions", () => {
+  /** Release-asset-shaped fixture: js-node links to js-sdk. */
+  async function companionFixture(): Promise<string> {
+    const src = tmpDataDir("ditto-e2e-js-src-");
+    const write = (rel: string, text: string) => {
+      fs.mkdirSync(path.dirname(path.join(src, rel)), { recursive: true });
+      fs.writeFileSync(path.join(src, rel), text, "utf8");
+    };
+    write("skills/js-node/SKILL.md", "See [js-sdk](../js-sdk/SKILL.md).\n");
+    write("skills/js-sdk/SKILL.md", "# js-sdk\n");
+    write("skills/write-dql/SKILL.md", "# write-dql\n");
+    const tgz = path.join(tmpDataDir("ditto-e2e-js-"), "ditto-skills.tar.gz");
+    await tar.c({ file: tgz, gzip: true, cwd: src }, ["skills"]);
+    rmrf(src);
+    return tgz;
+  }
+
+  it("add installs linked skills; --no-deps installs only the named one", async () => {
+    const tgz = await companionFixture();
+    const proj = tmpDataDir("ditto-e2e-proj-");
+    const home = tmpDataDir("ditto-e2e-home-");
+    const env = { DITTOSH_SKILLS_TARBALL: tgz, HOME: home };
+    try {
+      const add = (await cli(
+        ["skills", "add", "js-node", "--agent", "claude", "--project", proj, "--format", "json"],
+        env,
+      )) as unknown as RunResult;
+      expect(add.exitCode).toBe(0);
+      const rows = JSON.parse(add.stdout) as { skill: string; status: string; detail: string }[];
+      expect(rows.map((r) => [r.skill, r.status])).toEqual([
+        ["js-node", "installed"],
+        ["js-sdk", "installed"],
+      ]);
+      expect(rows[1]!.detail).toBe("companion of js-node");
+      expect(add.stderr).toContain("js-node links to companion skill js-sdk");
+      expect(fs.existsSync(path.join(proj, ".claude", "skills", "write-dql"))).toBe(false);
+
+      fs.rmSync(path.join(proj, ".claude", "skills"), { recursive: true, force: true });
+      const solo = (await cli(
+        ["skills", "add", "js-node", "--no-deps", "--agent", "claude", "--project", proj],
+        env,
+      )) as unknown as RunResult;
+      expect(solo.exitCode).toBe(0);
+      expect(solo.stderr).not.toContain("companion");
+      expect(fs.readdirSync(path.join(proj, ".claude", "skills"))).toEqual(["js-node"]);
+    } finally {
+      rmrf(proj);
+      rmrf(home);
+      rmrf(path.dirname(tgz));
+    }
+  });
+});

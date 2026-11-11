@@ -8,6 +8,8 @@ export interface InstallResult {
   target: string;
   ok: boolean;
   detail?: string;
+  /** Skipped because the skill is already installed there (no --force). */
+  exists?: boolean;
 }
 
 /** The marker file recording provenance for `skills update`/`list`. */
@@ -18,6 +20,8 @@ export interface Marker {
   ref: string;
   installedAt: string;
   channel: "global" | "project";
+  /** false when installed with --no-deps; `update` then skips companions too. */
+  deps?: boolean;
 }
 
 /**
@@ -32,7 +36,7 @@ export function installSkill(
   skillName: string,
   agent: AgentSpec,
   ref: string,
-  opts: { home?: string; project?: string; force?: boolean },
+  opts: { home?: string; project?: string; force?: boolean; deps?: boolean },
 ): InstallResult {
   try {
     // Single-file agents (copilot/windsurf): emit one flattened markdown file.
@@ -64,6 +68,7 @@ export function installSkill(
         agent: agent.name,
         target,
         ok: false,
+        exists: true,
         detail: `already installed${existing ? ` (${existing.ref})` : ""} — pass --force to overwrite`,
       };
     }
@@ -79,6 +84,7 @@ export function installSkill(
         ref,
         installedAt: new Date().toISOString(),
         channel: opts.project ? "project" : "global",
+        ...(opts.deps === false ? { deps: false } : {}),
       };
       fs.writeFileSync(path.join(staged, MARKER), `${JSON.stringify(marker, null, 2)}\n`, "utf8");
       fs.rmSync(target, { recursive: true, force: true });
@@ -104,7 +110,7 @@ function installToFile(
   agent: AgentSpec,
   ref: string,
   file: string,
-  opts: { project?: string; force?: boolean },
+  opts: { project?: string; force?: boolean; deps?: boolean },
 ): InstallResult {
   try {
     if (fs.existsSync(file) && !opts.force) {
@@ -113,6 +119,7 @@ function installToFile(
         agent: agent.name,
         target: file,
         ok: false,
+        exists: true,
         detail: `already installed${existing ? ` (${existing.ref})` : ""} — pass --force to overwrite`,
       };
     }
@@ -125,7 +132,14 @@ function installToFile(
       };
     }
     const skillMd = fs.readFileSync(path.join(skillDir, "SKILL.md"), "utf8");
-    const marker = `<!-- dql-skill {"skill":"${skillName}","ref":"${ref}","installedAt":"${new Date().toISOString()}","channel":"${opts.project ? "project" : "global"}"} -->\n`;
+    const fields: Marker = {
+      skill: skillName,
+      ref,
+      installedAt: new Date().toISOString(),
+      channel: opts.project ? "project" : "global",
+      ...(opts.deps === false ? { deps: false } : {}),
+    };
+    const marker = `<!-- dql-skill ${JSON.stringify(fields)} -->\n`;
     const body = `${marker}${skillMd}\n\n> Full skill resources (references/, examples/) are available in the agent-skills repo (skills/${skillName}/).\n`;
     fs.mkdirSync(path.dirname(file), { recursive: true });
     const staged = `${file}.dql-tmp`;

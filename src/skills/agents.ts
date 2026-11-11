@@ -135,6 +135,15 @@ export function targetDir(
   return path.join(agent.globalDir(home), skillName);
 }
 
+/**
+ * Whether this agent gets one flattened file per skill (copilot/windsurf in a
+ * project). Links to other skills' files can't resolve there, so companion
+ * skills are not installed for these agents.
+ */
+export function isSingleFile(agent: AgentSpec, opts: { project?: string }): boolean {
+  return Boolean(opts.project && agent.projectFile);
+}
+
 /** Single-file install target for instruction-file agents (copilot/windsurf), project scope only. */
 export function targetFile(
   agent: AgentSpec,
